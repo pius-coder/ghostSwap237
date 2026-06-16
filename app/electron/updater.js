@@ -1,8 +1,7 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { spawn } from 'child_process';
 import { Readable } from 'stream';
 
 export const CURRENT_VERSION = '1.0.0';
@@ -343,13 +342,10 @@ async function installDownloadedUpdate() {
       message: 'Installing update and restarting Format-Boy Cam...',
     });
 
-    const spawnArguments = [];
-    const updaterProcess = spawn(updateState.downloadedFilePath, spawnArguments, {
-      detached: true,
-      stdio: 'ignore',
-    });
-
-    updaterProcess.unref();
+    const launchError = await shell.openPath(updateState.downloadedFilePath);
+    if (launchError) {
+      throw new Error(`Failed to launch the downloaded installer: ${launchError}`);
+    }
 
     setTimeout(() => {
       app.quit();
