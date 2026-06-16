@@ -28,6 +28,19 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Sync app version from tag
+        working-directory: ./app
+        shell: powershell
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          npm version $version --no-git-tag-version --allow-same-version
+
+          $packageVersion = (Get-Content "./package.json" -Raw | ConvertFrom-Json).version
+          if ($packageVersion -ne $version) {
+            Write-Error "Package version $packageVersion does not match release tag $version"
+            exit 1
+          }
+
       - name: Install dependencies
         working-directory: ./app
         run: npm ci
