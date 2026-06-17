@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowDownLeft, ArrowUpRight, Plus, ExternalLink, LogOut } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -7,22 +7,45 @@ import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { PaymentModal } from '@/components/PaymentModal';
+import { supabase } from '@/lib/supabase';
 
-const CREDIT_PLANS = [
-  { credits: 500, priceNGN: 14000 },
-  { credits: 1000, priceNGN: 28000 },
-  { credits: 2000, priceNGN: 56000 },
-  { credits: 5000, priceNGN: 140000 },
-];
+interface CreditPlan {
+  credits: number;
+  priceNGN: number;
+}
 
 const CREDITS_PER_SECOND = 2;
 
 function Wallet() {
   const { credits, transactions } = useApp();
   const { user, logout } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState<typeof CREDIT_PLANS[0] | null>(null);
+  const [plans, setPlans] = useState<CreditPlan[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
+  const [selectedPlan, setSelectedPlan] = useState<CreditPlan | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [showFundModal, setShowFundModal] = useState(false);
+
+  useEffect(() => {
+    async function loadPlans() {
+      try {
+        const { data, error } = await supabase
+          .from('plans')
+          .select('credits, price')
+          .order('credits', { ascending: true });
+
+        if (error) throw error;
+        if (data) {
+          setPlans(data.map(p => ({ credits: p.credits, priceNGN: Number(p.price) })));
+        }
+      } catch (err) {
+        console.error('Failed to load plans:', err);
+        toast.error('Failed to load credit packages.');
+      } finally {
+        setLoadingPlans(false);
+      }
+    }
+    loadPlans();
+  }, []);
 
   const remainingSeconds = Math.floor(credits / CREDITS_PER_SECOND);
 
@@ -86,26 +109,30 @@ function Wallet() {
           </CardHeader>
           <CardContent className="p-6">
             <label className="block text-xs font-medium text-[#a1a1aa] mb-3">Select Package</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-              {CREDIT_PLANS.map((plan) => (
-                <button
-                  key={plan.credits}
-                  onClick={() => setSelectedPlan(plan)}
-                  className={`p-4 rounded-xl border text-left transition-all duration-150 ${
-                    selectedPlan?.credits === plan.credits
-                      ? 'bg-blue-600/15 border-blue-500 ring-2 ring-blue-500/40 shadow-lg shadow-blue-500/10'
-                      : 'bg-[#1a1a1f] border-[#27272a] text-white hover:border-[#3f3f46] hover:bg-[#222]'
-                  }`}
-                >
-                  <div className="flex flex-col">
-                    <span className={`text-lg font-bold ${selectedPlan?.credits === plan.credits ? 'text-blue-400' : 'text-white'}`}>
-                      {plan.credits.toLocaleString()} Credits
-                    </span>
-                    <span className="text-sm text-[#a1a1aa] mt-1">NGN {plan.priceNGN.toLocaleString()}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
+            {loadingPlans ? (
+              <div className="text-center py-4 text-[#71717a]">Loading packages...</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                {plans.map((plan) => (
+                  <button
+                    key={plan.credits}
+                    onClick={() => setSelectedPlan(plan)}
+                    className={`p-4 rounded-xl border text-left transition-all duration-150 ${
+                      selectedPlan?.credits === plan.credits
+                        ? 'bg-blue-600/15 border-blue-500 ring-2 ring-blue-500/40 shadow-lg shadow-blue-500/10'
+                        : 'bg-[#1a1a1f] border-[#27272a] text-white hover:border-[#3f3f46] hover:bg-[#222]'
+                    }`}
+                  >
+                    <div className="flex flex-col">
+                      <span className={`text-lg font-bold ${selectedPlan?.credits === plan.credits ? 'text-blue-400' : 'text-white'}`}>
+                        {plan.credits.toLocaleString()} Credits
+                      </span>
+                      <span className="text-sm text-[#a1a1aa] mt-1">NGN {plan.priceNGN.toLocaleString()}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <Button
               onClick={handleFundWallet}

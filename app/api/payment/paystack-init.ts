@@ -1,10 +1,5 @@
 // @ts-nocheck
-const CREDIT_PRICING_NGN = {
-  500: 14000,
-  1000: 28000,
-  2000: 56000,
-  5000: 140000
-};
+import { supabaseAdmin, supabaseAdminConfigError } from '../supabase.js';
 
 function toKobo(amountNGN) {
   const amount = Number(amountNGN);
@@ -29,14 +24,28 @@ export default async function handler(req, res) {
   }
 
   const requestedCredits = Number(credits);
-  const amountNGN = CREDIT_PRICING_NGN[requestedCredits as keyof typeof CREDIT_PRICING_NGN];
 
-  if (!amountNGN) {
-    return res.status(400).json({
+  if (!supabaseAdmin) {
+    return res.status(503).json({
       status: 'failed',
-      message: 'Invalid credit package selected',
+      message: supabaseAdminConfigError || 'Supabase admin is not configured',
     });
   }
+
+  const { data: plan, error: planError } = await supabaseAdmin
+    .from('plans')
+    .select('price')
+    .eq('credits', requestedCredits)
+    .maybeSingle();
+
+  if (planError || !plan) {
+    return res.status(400).json({
+      status: 'failed',
+      message: 'Invalid credit package selected or package not found in backend',
+    });
+  }
+
+  const amountNGN = Number(plan.price);
 
   const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
   if (!paystackSecretKey) {

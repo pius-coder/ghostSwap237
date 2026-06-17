@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, Coins, Loader2, LogIn, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -9,13 +9,14 @@ import { useApp } from '@/context/AppContext';
 import { apiFetch, isTimeoutError, isAbortError } from '@/lib/api-client';
 import { ROUTES } from '@/lib/routes';
 import { isFiniteNumber } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
-const CREDIT_PLANS = [
-  { credits: 500, priceNGN: 14000 },
-  { credits: 1000, priceNGN: 28000 },
-  { credits: 2000, priceNGN: 56000 },
-  { credits: 5000, priceNGN: 140000 },
-];
+interface CreditPlan {
+  credits: number;
+  priceNGN: number;
+  name?: string;
+  duration_minutes?: number;
+}
 
 type PaystackCallbackResponse = {
   reference?: string;
@@ -83,10 +84,39 @@ function Subscription() {
   const navigate = useNavigate();
   const { user, logout, loading: authLoading } = useAuth();
   const { refreshCredits } = useApp();
-  const [selectedPlan, setSelectedPlan] = useState<typeof CREDIT_PLANS[0] | null>(null);
+  const [plans, setPlans] = useState<CreditPlan[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
+  const [selectedPlan, setSelectedPlan] = useState<CreditPlan | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleSelectPlan = (plan: typeof CREDIT_PLANS[0]) => {
+  useEffect(() => {
+    async function loadPlans() {
+      try {
+        const { data, error } = await supabase
+          .from('plans')
+          .select('*')
+          .order('credits', { ascending: true });
+
+        if (error) throw error;
+        if (data) {
+          setPlans(data.map(p => ({
+            credits: p.credits,
+            priceNGN: Number(p.price),
+            name: p.name,
+            duration_minutes: p.duration_minutes
+          })));
+        }
+      } catch (err) {
+        console.error('Failed to load plans:', err);
+        toast.error('Failed to load credit packages.');
+      } finally {
+        setLoadingPlans(false);
+      }
+    }
+    loadPlans();
+  }, []);
+
+  const handleSelectPlan = (plan: CreditPlan) => {
     setSelectedPlan(plan);
   };
 
@@ -263,39 +293,43 @@ function Subscription() {
         <div className="mb-8">
           <label className="block text-sm font-medium text-[#a1a1aa] mb-3">Select Credits</label>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {CREDIT_PLANS.map((plan) => {
-              const isSelected = selectedPlan?.credits === plan.credits;
-              const priceNGN = plan.priceNGN;
+            {loadingPlans ? (
+              <div className="col-span-full text-center py-8 text-[#71717a]">Loading plans...</div>
+            ) : (
+              plans.map((plan) => {
+                const isSelected = selectedPlan?.credits === plan.credits;
+                const priceNGN = plan.priceNGN;
 
-              return (
-                <button
-                  key={plan.credits}
-                  onClick={() => handleSelectPlan(plan)}
-                  className={`p-5 rounded-xl border text-left transition-all duration-200 ${
-                    isSelected
-                      ? 'bg-gradient-to-br from-blue-600/15 via-blue-600/5 to-transparent border-blue-500 shadow-xl shadow-blue-500/20 ring-2 ring-blue-500/50'
-                      : 'bg-gradient-to-br from-[#131316] to-[#0f0f10] border-[#27272a] hover:border-[#3f3f46] hover:bg-[#1a1a1f]'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                        isSelected ? 'bg-blue-500/20' : 'bg-[#27272a]'
-                      }`}
-                    >
-                      <Coins className={`w-5 h-5 ${isSelected ? 'text-blue-400' : 'text-[#71717a]'}`} />
+                return (
+                  <button
+                    key={plan.credits}
+                    onClick={() => handleSelectPlan(plan)}
+                    className={`p-5 rounded-xl border text-left transition-all duration-200 ${
+                      isSelected
+                        ? 'bg-gradient-to-br from-blue-600/15 via-blue-600/5 to-transparent border-blue-500 shadow-xl shadow-blue-500/20 ring-2 ring-blue-500/50'
+                        : 'bg-gradient-to-br from-[#131316] to-[#0f0f10] border-[#27272a] hover:border-[#3f3f46] hover:bg-[#1a1a1f]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                       <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                          isSelected ? 'bg-blue-500/20' : 'bg-[#27272a]'
+                        }`}
+                      >
+                        <Coins className={`w-5 h-5 ${isSelected ? 'text-blue-400' : 'text-[#71717a]'}`} />
+                      </div>
+                      <div>
+                        <span className="text-lg font-bold text-white leading-tight block">{plan.credits.toLocaleString()} Credits</span>
+                        <span className="text-xs text-[#71717a] block mt-0.5">{formatTime(plan.credits)}</span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-lg font-bold text-white leading-tight block">{plan.credits.toLocaleString()} Credits</span>
-                      <span className="text-xs text-[#71717a] block mt-0.5">{formatTime(plan.credits)}</span>
+                    <div className="flex items-center gap-2 mt-4">
+                       <span className="text-2xl font-bold text-white">₦{priceNGN.toLocaleString()}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 mt-4">
-                     <span className="text-2xl font-bold text-white">₦{priceNGN.toLocaleString()}</span>
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
 

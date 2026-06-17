@@ -108,10 +108,10 @@ CREATE POLICY "Users can only access their own subscriptions"
   ON public.subscriptions FOR ALL
   USING (auth.uid() = user_id);
 
--- Plans Policy (Available to all authenticated users to view)
-CREATE POLICY "Authenticated users can view plans"
+-- Plans Policy (Available to anyone to view)
+CREATE POLICY "Anyone can view plans"
   ON public.plans FOR SELECT
-  USING (auth.role() = 'authenticated');
+  USING (true);
 
 -- ============================================
 -- TRIGGERS & FUNCTIONS

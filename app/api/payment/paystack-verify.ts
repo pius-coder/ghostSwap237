@@ -2,23 +2,7 @@
 import { supabaseAdmin, supabaseAdminConfigError } from '../supabase.js';
 import { requireWalletByUserId, logCreditUpdate, updateWalletCredits } from '../credit-utils.js';
 
-const CREDIT_PRICING_NGN = {
-  500: 14000,
-  1000: 28000,
-  2000: 56000,
-  5000: 140000
-};
-
 const CREDITS_PER_SECOND = 2;
-
-function toKobo(amountNGN) {
-  const amount = Number(amountNGN);
-  return Number.isFinite(amount) ? Math.round(amount * 100) : NaN;
-}
-
-const CREDIT_PRICING_KOBO = Object.fromEntries(
-  Object.entries(CREDIT_PRICING_NGN).map(([credits, ngn]) => [credits, toKobo(ngn)])
-);
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -128,18 +112,29 @@ export default async function handler(req, res) {
       });
     }
 
+    const { data: plans, error: plansError } = await supabaseAdmin
+      .from('plans')
+      .select('price, credits');
+
+    if (plansError || !plans) {
+      return res.status(500).json({
+        status: 'failed',
+        message: 'Failed to retrieve plans from database for verification',
+      });
+    }
+
     let creditsToAdd = 0;
-    for (const [credits, expectedKobo] of Object.entries(CREDIT_PRICING_KOBO)) {
-      if (amountKobo === expectedKobo) {
-        creditsToAdd = Number(credits);
-        break;
-      }
+    const paidNgn = amountKobo / 100;
+    const matchedPlan = plans.find(p => Math.round(Number(p.price)) === Math.round(paidNgn));
+
+    if (matchedPlan) {
+      creditsToAdd = matchedPlan.credits;
     }
 
     if (creditsToAdd === 0) {
       return res.status(400).json({
         status: 'failed',
-        message: `Amount ₦${(amountKobo / 100).toLocaleString()} does not match any valid credit tier.`,
+        message: `Amount ₦${paidNgn.toLocaleString()} does not match any valid credit tier.`,
       });
     }
 
