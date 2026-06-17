@@ -29,13 +29,14 @@ function Wallet() {
     async function loadPlans() {
       try {
         const { data, error } = await supabase
-          .from('plans')
-          .select('credits, price')
+          .from('credit_packages')
+          .select('credits, price_ngn')
+          .eq('is_active', true)
           .order('credits', { ascending: true });
 
         if (error) throw error;
         if (data) {
-          setPlans(data.map(p => ({ credits: p.credits, priceNGN: Number(p.price) })));
+          setPlans(data.map(p => ({ credits: p.credits, priceNGN: Number(p.price_ngn) })));
         }
       } catch (err) {
         console.error('Failed to load plans:', err);

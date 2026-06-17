@@ -93,17 +93,17 @@ function Subscription() {
     async function loadPlans() {
       try {
         const { data, error } = await supabase
-          .from('plans')
-          .select('*')
+          .from('credit_packages')
+          .select('credits, price_ngn, name')
+          .eq('is_active', true)
           .order('credits', { ascending: true });
 
         if (error) throw error;
         if (data) {
           setPlans(data.map(p => ({
             credits: p.credits,
-            priceNGN: Number(p.price),
-            name: p.name,
-            duration_minutes: p.duration_minutes
+            priceNGN: Number(p.price_ngn),
+            name: p.name
           })));
         }
       } catch (err) {

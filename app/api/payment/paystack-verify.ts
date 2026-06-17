@@ -113,8 +113,9 @@ export default async function handler(req, res) {
     }
 
     const { data: plans, error: plansError } = await supabaseAdmin
-      .from('plans')
-      .select('price, credits');
+      .from('credit_packages')
+      .select('price_ngn, credits')
+      .eq('is_active', true);
 
     if (plansError || !plans) {
       return res.status(500).json({
@@ -125,7 +126,7 @@ export default async function handler(req, res) {
 
     let creditsToAdd = 0;
     const paidNgn = amountKobo / 100;
-    const matchedPlan = plans.find(p => Math.round(Number(p.price)) === Math.round(paidNgn));
+    const matchedPlan = plans.find(p => Math.round(Number(p.price_ngn)) === Math.round(paidNgn));
 
     if (matchedPlan) {
       creditsToAdd = matchedPlan.credits;

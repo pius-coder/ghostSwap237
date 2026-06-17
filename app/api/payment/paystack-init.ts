@@ -33,9 +33,10 @@ export default async function handler(req, res) {
   }
 
   const { data: plan, error: planError } = await supabaseAdmin
-    .from('plans')
-    .select('price')
+    .from('credit_packages')
+    .select('price_ngn')
     .eq('credits', requestedCredits)
+    .eq('is_active', true)
     .maybeSingle();
 
   if (planError || !plan) {
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const amountNGN = Number(plan.price);
+  const amountNGN = Number(plan.price_ngn);
 
   const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
   if (!paystackSecretKey) {
