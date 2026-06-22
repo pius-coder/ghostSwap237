@@ -129,6 +129,11 @@ function Settings() {
   const checkedAtLabel = updateState.checkedAt
     ? new Date(updateState.checkedAt).toLocaleString()
     : 'Not checked yet';
+  const releaseNotes = updateState.notes
+    ?.split(/\r?\n/)
+    .filter((line) => !/\bsha-?256\b/i.test(line))
+    .join('\n')
+    .trim();
 
   return (
     <div className="max-w-3xl">
@@ -213,10 +218,10 @@ function Settings() {
               </p>
             )}
 
-            {updateState.notes && (
+            {releaseNotes && (
               <div className="rounded-xl border border-[#27272a] bg-[#18181b] p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-[#71717a] mb-2">Release Notes</p>
-                <p className="text-sm text-[#d4d4d8] whitespace-pre-wrap">{updateState.notes}</p>
+                <p className="text-sm text-[#d4d4d8] whitespace-pre-wrap">{releaseNotes}</p>
               </div>
             )}
 
@@ -232,11 +237,6 @@ function Settings() {
               </p>
             )}
 
-            {updateState.downloadUrl && (
-              <p className="text-xs text-[#71717a] break-all">
-                Update source: {updateState.downloadUrl}
-              </p>
-            )}
           </CardContent>
         </Card>
 
