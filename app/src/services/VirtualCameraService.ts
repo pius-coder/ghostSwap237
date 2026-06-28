@@ -31,13 +31,13 @@ export class VirtualCameraService {
   private _ctx: OffscreenCanvasRenderingContext2D | null = null;
   private _timerId: ReturnType<typeof setTimeout> | null = null;
   private _video: HTMLVideoElement | null = null;
-  private _videoFrameCallbackId: number | null = null;
   private _running = false;
   private _lastFrameAt = 0;
   // Diagnostics
   private _sentFrameCount = 0;
   private _lastReportAt = 0;
   private _notReadyCount = 0;
+  private _drawFailureCount = 0;
 
   // Width / height of the virtual camera output (must match kDefaultWidth/Height in C++)
   static readonly WIDTH  = 1280;
@@ -59,18 +59,18 @@ export class VirtualCameraService {
 
     const ipc = getIpc();
     if (ipc) {
-      // Electron path — drive the pipe publisher at 30 fps
+      // Electron path — keep the pipe publisher fed at the configured FPS.
       this._canvas = new OffscreenCanvas(VirtualCameraService.WIDTH, VirtualCameraService.HEIGHT);
       this._ctx    = this._canvas.getContext('2d', { willReadFrequently: true }) as
                        OffscreenCanvasRenderingContext2D;
+      this._ctx.fillStyle = 'black';
+      this._ctx.fillRect(0, 0, VirtualCameraService.WIDTH, VirtualCameraService.HEIGHT);
       this._running = true;
       this._lastFrameAt = 0;
+      this._notReadyCount = 0;
+      this._drawFailureCount = 0;
 
-      if (typeof video.requestVideoFrameCallback === 'function') {
-        this._scheduleVideoFrame(video, ipc);
-      } else {
-        this._scheduleFrame(video, ipc);
-      }
+      this._scheduleFrame(video, ipc);
     } else {
       // MediaStream capture is only needed for browser/non-Electron fallback.
       const capture = video as HTMLVideoElement & {
@@ -95,10 +95,6 @@ export class VirtualCameraService {
       clearTimeout(this._timerId);
       this._timerId = null;
     }
-    if (this._video && this._videoFrameCallbackId !== null && typeof this._video.cancelVideoFrameCallback === 'function') {
-      this._video.cancelVideoFrameCallback(this._videoFrameCallbackId);
-      this._videoFrameCallbackId = null;
-    }
     if (this._stream) {
       this._stream.getTracks().forEach((t) => t.stop());
       this._stream = null;
@@ -109,7 +105,7 @@ export class VirtualCameraService {
   }
 
   // ---------------------------------------------------------------------------
-  // _scheduleFrame — 30 fps loop that accounts for time spent rendering
+  // _scheduleFrame — steady publisher loop that accounts for time spent rendering
   // ---------------------------------------------------------------------------
   private _scheduleFrame(video: HTMLVideoElement, ipc: Electron.IpcRenderer) {
     if (!this._running) return;
@@ -125,58 +121,52 @@ export class VirtualCameraService {
     }, delay);
   }
 
-  private _scheduleVideoFrame(video: HTMLVideoElement, ipc: Electron.IpcRenderer) {
-    if (!this._running || typeof video.requestVideoFrameCallback !== 'function') {
-      return;
-    }
-
-    this._videoFrameCallbackId = video.requestVideoFrameCallback(() => {
-      if (!this._running) {
-        return;
-      }
-
-      const now = Date.now();
-      if (now - this._lastFrameAt >= VirtualCameraService.FRAME_INTERVAL_MS) {
-        this._lastFrameAt = now;
-        this._captureAndSend(video, ipc);
-      }
-
-      this._scheduleVideoFrame(video, ipc);
-    });
-  }
   // ---------------------------------------------------------------------------
   // _captureAndSend — draw one frame to OffscreenCanvas and ship it
   // ---------------------------------------------------------------------------
   private _captureAndSend(video: HTMLVideoElement, ipc: Electron.IpcRenderer) {
     if (!this._ctx || !this._canvas) return;
 
-    if (video.readyState < 2) {
+    const videoReady =
+      video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+      video.videoWidth > 0 &&
+      video.videoHeight > 0;
+
+    if (!videoReady) {
       this._notReadyCount++;
-      // Surface a warning once per ~30 misses (1 s at 30 fps) so the dev
-      // console makes it obvious that the source video is stalled rather
-      // than silently sending nothing.
-      if (this._notReadyCount % 30 === 1) {
+      const warnEvery = Math.max(1, VirtualCameraService.FPS * 2);
+      // Keep sending the current canvas frame so WhatsApp receives a stable
+      // camera stream while the Decart video is warming up or recovering.
+      if (this._notReadyCount % warnEvery === 1) {
         console.warn(
           `[VirtualCameraService] source video not ready ` +
           `(readyState=${video.readyState}, paused=${video.paused}, ` +
-          `ended=${video.ended}); virtual camera will fall back to black`
+          `ended=${video.ended}); reusing last virtual camera frame`
         );
         // Best-effort recovery: nudge playback if it's just paused.
         if (video.paused && !video.ended) {
           video.play().catch(() => {});
         }
       }
-      return;
+    } else {
+      this._notReadyCount = 0;
+      try {
+        // Stretch to the camera resolution (1280×720)
+        this._ctx.drawImage(
+          video, 0, 0,
+          VirtualCameraService.WIDTH, VirtualCameraService.HEIGHT,
+        );
+        this._drawFailureCount = 0;
+      } catch (err) {
+        this._drawFailureCount++;
+        const warnEvery = Math.max(1, VirtualCameraService.FPS * 2);
+        if (this._drawFailureCount % warnEvery === 1) {
+          console.warn('[VirtualCameraService] drawImage failed; reusing last frame:', err);
+        }
+      }
     }
-    this._notReadyCount = 0;
 
     try {
-      // Stretch to the camera resolution (1280×720)
-      this._ctx.drawImage(
-        video, 0, 0,
-        VirtualCameraService.WIDTH, VirtualCameraService.HEIGHT,
-      );
-
       const imageData = this._ctx.getImageData(
         0, 0,
         VirtualCameraService.WIDTH, VirtualCameraService.HEIGHT,
