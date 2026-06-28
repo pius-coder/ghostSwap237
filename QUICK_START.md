@@ -32,7 +32,7 @@ On Vercel Dashboard > Project Settings > Environment Variables:
 **Required:**
 - `DESKTOP_GITHUB_OWNER` = `samuellucky2424-afk`
 - `DESKTOP_GITHUB_REPO` = `Format-Boy.Cam`
-- `DESKTOP_GITHUB_EXE_PATTERN` = `^Format-Boy CAM Desktop Setup .*\.exe$`
+- `DESKTOP_GITHUB_EXE_PATTERN` = `^Format-Boy[ .]CAM[ .]Desktop[ .]Setup[ .].*\.exe$`
 
 (See `VERCEL_CONFIG.md` for complete guide)
 

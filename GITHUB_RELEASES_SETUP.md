@@ -36,7 +36,7 @@ On your Vercel dashboard, add these environment variables to your project:
 ```
 DESKTOP_GITHUB_OWNER=samuellucky2424-afk  # Your GitHub username/organization
 DESKTOP_GITHUB_REPO=Format-Boy.Cam  # Your repository name
-DESKTOP_GITHUB_EXE_PATTERN=^Format-Boy CAM Desktop Setup .*\.exe$  # Regex pattern for the installer filename
+DESKTOP_GITHUB_EXE_PATTERN=^Format-Boy[ .]CAM[ .]Desktop[ .]Setup[ .].*\.exe$  # Regex pattern for the installer filename
 ```
 
 **Optional:** If you still want to keep Supabase as a fallback, leave those variables as-is. GitHub will be checked first.

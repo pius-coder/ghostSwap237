@@ -8,7 +8,8 @@ const FALLBACK_ARTIFACT_TYPE = 'installer';
 const DEFAULT_SIGNED_URL_EXPIRES = 60 * 60 * 2;
 const DEFAULT_GITHUB_OWNER = 'samuellucky2424-afk';
 const DEFAULT_GITHUB_REPO = 'Format-Boy.Cam';
-const DEFAULT_GITHUB_EXE_PATTERN = '^Format-Boy CAM Desktop Setup .*\\.exe$';
+const DEFAULT_GITHUB_EXE_PATTERN = '^Format-Boy[ .]CAM[ .]Desktop[ .]Setup[ .].*\\.exe$';
+const GITHUB_NORMALIZED_EXE_PATTERN = /^Format-Boy[ .]CAM[ .]Desktop[ .]Setup[ .].*\.exe$/i;
 
 function trimSlashes(value = '') {
   return String(value).replace(/^\/+|\/+$/g, '').trim();
@@ -35,7 +36,10 @@ async function fetchGitHubRelease(owner, repo, exePattern) {
     if (!response.ok) return null;
 
     const release = await response.json();
-    const exeAsset = release.assets.find((asset) => exePattern.test(asset.name));
+    const exeAsset = release.assets.find((asset) => {
+      exePattern.lastIndex = 0;
+      return exePattern.test(asset.name) || GITHUB_NORMALIZED_EXE_PATTERN.test(asset.name);
+    });
     
     if (!exeAsset) return null;
 

@@ -15,7 +15,7 @@ Value: Format-Boy.Cam
 Environment: Production
 
 Name: DESKTOP_GITHUB_EXE_PATTERN
-Value: ^Format-Boy CAM Desktop Setup .*\.exe$
+Value: ^Format-Boy[ .]CAM[ .]Desktop[ .]Setup[ .].*\.exe$
 Environment: Production
 ```
 
