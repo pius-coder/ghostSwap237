@@ -45,6 +45,40 @@ jobs:
         working-directory: ./app
         run: npm ci
 
+      - name: Validate release environment
+        shell: powershell
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_PAYSTACK_PUBLIC_KEY: ${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          $required = @(
+            'VITE_API_BASE_URL',
+            'VITE_PAYSTACK_PUBLIC_KEY',
+            'VITE_SUPABASE_URL',
+            'VITE_SUPABASE_ANON_KEY'
+          )
+
+          foreach ($name in $required) {
+            if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) {
+              Write-Error "Required GitHub Actions secret is missing: $name"
+              exit 1
+            }
+          }
+
+          if ($env:VITE_SUPABASE_URL -ne 'https://wwehdzkmoxyfkvkrascn.supabase.co') {
+            Write-Error 'Release is not configured for the current Supabase project.'
+            exit 1
+          }
+
+          @"
+          VITE_API_BASE_URL=$env:VITE_API_BASE_URL
+          VITE_PAYSTACK_PUBLIC_KEY=$env:VITE_PAYSTACK_PUBLIC_KEY
+          VITE_SUPABASE_URL=$env:VITE_SUPABASE_URL
+          VITE_SUPABASE_ANON_KEY=$env:VITE_SUPABASE_ANON_KEY
+          "@ | Set-Content -Path './app/.env' -Encoding utf8
+
       - name: Build native camera binaries (cmake)
         shell: powershell
         run: |
@@ -58,6 +92,10 @@ jobs:
         run: npm run electron:release
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_PAYSTACK_PUBLIC_KEY: ${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Find built installer
         id: find_installer
