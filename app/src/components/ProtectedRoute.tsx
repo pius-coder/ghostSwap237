@@ -37,7 +37,7 @@ export function ProtectedRoute({ children, redirectTo }: RouteGuardProps) {
 }
 
 export function PublicRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   
   if (loading) {
     return (
@@ -51,7 +51,8 @@ export function PublicRoute({ children }: { children: ReactNode }) {
   }
 
   if (isAuthenticated) {
-    return <Navigate to={ROUTES.DEFAULT} replace />;
+    const redirectPath = user?.isAdmin ? ROUTES.PROTECTED.ADMIN_DASHBOARD : ROUTES.DEFAULT;
+    return <Navigate to={redirectPath} replace />;
   }
 
   return <>{children}</>;

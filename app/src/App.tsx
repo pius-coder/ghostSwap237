@@ -18,6 +18,7 @@ const PreviewWindow = lazy(() => import('@/pages/PreviewWindow'));
 const Wallet = lazy(() => import('@/pages/Wallet'));
 const Subscription = lazy(() => import('@/pages/Subscription'));
 const Settings = lazy(() => import('@/pages/Settings'));
+const AdminDashboard = lazy(() => import('@/pages/AdminDashboard'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const PaymentSuccess = lazy(() => import('@/pages/PaymentSuccess'));
 
@@ -74,6 +75,7 @@ function App() {
                     <Route index element={<Navigate to={ROUTES.DEFAULT} replace />} />
                     <Route path={ROUTES.PROTECTED.WALLET} element={<Wallet />} />
                     <Route path={ROUTES.PROTECTED.SETTINGS} element={<Settings />} />
+                    <Route path={ROUTES.PROTECTED.ADMIN_DASHBOARD} element={<AdminDashboard />} />
                   </Route>
                   <Route
                     path={ROUTES.PROTECTED.DASHBOARD}

@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
-import { PaymentModal } from '@/components/PaymentModal';
+import { CryptoPaymentModal } from '@/components/CryptoPaymentModal';
 import { supabase } from '@/lib/supabase';
 
 interface CreditPlan {
+  id: string;
   credits: number;
   priceNGN: number;
+  priceUSD: number;
 }
 
 const CREDITS_PER_SECOND = 2;
@@ -30,13 +32,19 @@ function Wallet() {
       try {
         const { data, error } = await supabase
           .from('credit_packages')
-          .select('credits, price_ngn')
+          .select('id, credits, price_ngn, price_usd')
           .eq('is_active', true)
+          .order('sort_order', { ascending: true })
           .order('credits', { ascending: true });
 
         if (error) throw error;
         if (data) {
-          setPlans(data.map(p => ({ credits: p.credits, priceNGN: Number(p.price_ngn) })));
+          setPlans(data.map(p => ({ 
+            id: p.id,
+            credits: p.credits, 
+            priceNGN: Number(p.price_ngn),
+            priceUSD: Number(p.price_usd || 0)
+          })));
         }
       } catch (err) {
         console.error('Failed to load plans:', err);
@@ -128,7 +136,10 @@ function Wallet() {
                       <span className={`text-lg font-bold ${selectedPlan?.credits === plan.credits ? 'text-blue-400' : 'text-white'}`}>
                         {plan.credits.toLocaleString()} Credits
                       </span>
-                      <span className="text-sm text-[#a1a1aa] mt-1">NGN {plan.priceNGN.toLocaleString()}</span>
+                      <span className="text-sm text-[#a1a1aa] mt-1">
+                        ${plan.priceUSD > 0 ? plan.priceUSD.toLocaleString() : plan.priceNGN.toLocaleString()} 
+                        {plan.priceUSD === 0 && ' NGN'}
+                      </span>
                     </div>
                   </button>
                 ))}
@@ -142,11 +153,11 @@ function Wallet() {
               id="proceed-payment-btn"
             >
               <ExternalLink className="w-4 h-4 mr-2" />
-              Pay {selectedPlan ? `NGN ${selectedPlan.priceNGN.toLocaleString()}` : 'with Paystack'}
+              Pay {selectedPlan ? (selectedPlan.priceUSD ? `$${selectedPlan.priceUSD.toLocaleString()}` : `NGN ${selectedPlan.priceNGN.toLocaleString()}`) : 'Now'}
             </Button>
 
             <p className="text-xs text-[#52525b] text-center mt-3">
-              You&apos;ll be redirected to Paystack&apos;s secure payment page
+              You&apos;ll be asked to send USDT (ERC20) to complete the purchase
             </p>
           </CardContent>
         </Card>
@@ -196,7 +207,7 @@ function Wallet() {
         </CardContent>
       </Card>
 
-      <PaymentModal
+      <CryptoPaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => {
           setIsPaymentModalOpen(false);

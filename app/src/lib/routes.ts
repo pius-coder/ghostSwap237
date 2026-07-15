@@ -10,6 +10,7 @@ export const ROUTES = {
     WALLET: '/credits',
     SUBSCRIPTION: '/subscription',
     SETTINGS: '/settings',
+    ADMIN_DASHBOARD: '/admin',
   },
   DEFAULT: '/dashboard',
 } as const;

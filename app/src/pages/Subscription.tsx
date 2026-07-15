@@ -10,39 +10,15 @@ import { apiFetch, isTimeoutError, isAbortError } from '@/lib/api-client';
 import { ROUTES } from '@/lib/routes';
 import { isFiniteNumber } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { CryptoPaymentModal } from '@/components/CryptoPaymentModal';
 
 interface CreditPlan {
+  id: string;
   credits: number;
   priceNGN: number;
+  priceUSD: number;
   name?: string;
   duration_minutes?: number;
-}
-
-type PaystackCallbackResponse = {
-  reference?: string;
-  trxref?: string;
-};
-
-type PaystackSetupOptions = {
-  key: string;
-  email: string;
-  amount: number;
-  ref?: string;
-  access_code?: string;
-  callback: (data: PaystackCallbackResponse) => void;
-  onClose: () => void;
-};
-
-type PaystackHandler = {
-  openIframe: () => void;
-};
-
-declare global {
-  interface Window {
-    PaystackPop?: {
-      setup: (options: PaystackSetupOptions) => PaystackHandler;
-    };
-  }
 }
 
 function formatTime(credits: number): string {
@@ -55,29 +31,6 @@ function formatTime(credits: number): string {
   }
 
   return `~${remainingSeconds}s`;
-}
-
-function loadPaystackSDK(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof window.PaystackPop?.setup === 'function') {
-      resolve();
-      return;
-    }
-
-    const existing = document.querySelector('script[src*="js.paystack.co"]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Failed to load Paystack SDK')));
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://js.paystack.co/v1/inline.js';
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Paystack SDK'));
-    document.head.appendChild(script);
-  });
 }
 
 function Subscription() {
@@ -94,15 +47,18 @@ function Subscription() {
       try {
         const { data, error } = await supabase
           .from('credit_packages')
-          .select('credits, price_ngn, name')
+          .select('id, credits, price_ngn, price_usd, name')
           .eq('is_active', true)
+          .order('sort_order', { ascending: true })
           .order('credits', { ascending: true });
 
         if (error) throw error;
         if (data) {
           setPlans(data.map(p => ({
+            id: p.id,
             credits: p.credits,
             priceNGN: Number(p.price_ngn),
+            priceUSD: Number(p.price_usd || 0),
             name: p.name
           })));
         }
@@ -139,107 +95,7 @@ function Subscription() {
     }
 
     setIsProcessing(true);
-
-    try {
-      await loadPaystackSDK();
-
-      if (typeof window.PaystackPop?.setup !== 'function') {
-        toast.error('Paystack SDK not loaded. Please refresh the page.');
-        setIsProcessing(false);
-        return;
-      }
-
-      const initRes = await apiFetch('/payment/paystack-init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          credits: selectedPlan.credits,
-          email: user.email,
-        }),
-        retries: 0,
-        timeoutMs: 45_000,
-      });
-
-      const initData = await initRes.json();
-      if (!initRes.ok || initData.status !== 'success') {
-        throw new Error(initData.message || 'Failed to initialize payment');
-      }
-
-      const reference = initData.reference;
-      const amountKobo = initData.amountKobo;
-      const accessCode = initData.access_code;
-      const verifyPayment = async (paymentReference: string) => {
-        setIsProcessing(true);
-        try {
-          const res = await apiFetch('/payment/paystack-verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              reference: paymentReference,
-            }),
-            retries: 0,
-            timeoutMs: 45_000,
-          });
-          const verifyData = await res.json();
-
-          if (verifyData.status === 'success') {
-            if (!isFiniteNumber(verifyData.creditsAdded)) {
-              throw new Error('Invalid payment verification response');
-            }
-
-            try {
-              await refreshCredits();
-            } catch (syncError) {
-              console.warn('Failed to refresh credits after payment success:', syncError);
-            }
-
-            toast.success(`Payment verified! ${verifyData.creditsAdded.toLocaleString()} credits added.`);
-            setSelectedPlan(null);
-          } else if (verifyData.status === 'already_processed') {
-            try {
-              await refreshCredits();
-            } catch (syncError) {
-              console.warn('Failed to refresh credits after already-processed payment:', syncError);
-            }
-            toast.success('Payment already processed.');
-          } else {
-            toast.error(verifyData.message || 'Payment verification failed');
-          }
-        } catch (error) {
-          if (isTimeoutError(error)) {
-            toast.error('Payment verification is taking longer than expected. Your credits may still be applied shortly.');
-          } else if (isAbortError(error)) {
-            // The request was aborted; the UI will reset below.
-          } else {
-            console.error('Verification error payload:', error);
-            toast.error('Unable to verify payment automatically.');
-          }
-        } finally {
-          setIsProcessing(false);
-        }
-      };
-
-      const handler = window.PaystackPop.setup({
-        key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
-        email: user.email,
-        amount: amountKobo,
-        ref: reference,
-        ...(accessCode ? { access_code: accessCode } : {}),
-        callback: function (data: PaystackCallbackResponse) {
-          void verifyPayment(data.reference || data.trxref || reference);
-        },
-        onClose: function () {
-          setIsProcessing(false);
-        },
-      });
-
-      handler.openIframe();
-    } catch (error) {
-      console.error('Payment init error:', error);
-      toast.error('Unable to start payment. Please try again.');
-      setIsProcessing(false);
-    }
+    // Show crypto modal instead of paystack logic
   };
 
   return (
@@ -324,7 +180,10 @@ function Subscription() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mt-4">
-                       <span className="text-2xl font-bold text-white">₦{priceNGN.toLocaleString()}</span>
+                       <span className="text-2xl font-bold text-white">
+                         ${plan.priceUSD > 0 ? plan.priceUSD.toLocaleString() : plan.priceNGN.toLocaleString()}
+                         {plan.priceUSD === 0 && ' NGN'}
+                       </span>
                     </div>
                   </button>
                 );
@@ -369,6 +228,12 @@ function Subscription() {
           </div>
         </div>
       )}
+
+      <CryptoPaymentModal
+        isOpen={isProcessing}
+        onClose={() => setIsProcessing(false)}
+        plan={selectedPlan}
+      />
     </div>
   );
 }

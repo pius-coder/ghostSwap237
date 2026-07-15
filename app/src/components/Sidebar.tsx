@@ -7,7 +7,8 @@ import {
   X,
   LogOut,
   Menu,
-  Settings
+  Settings,
+  ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -108,6 +109,24 @@ export default function Sidebar() {
               <span className="font-medium text-sm tracking-wide">{item.label}</span>
             </NavLink>
           ))}
+          {user?.isAdmin && (
+            <NavLink
+              to={ROUTES.PROTECTED.ADMIN_DASHBOARD}
+              onClick={() => {
+                if (window.innerWidth < 1024) toggleSidebar();
+              }}
+              className={({ isActive }) =>
+                `flex items-center gap-3.5 px-4 py-3.5 rounded-xl transition-all duration-200 group relative overflow-hidden mt-4 ${
+                  isActive
+                    ? 'bg-purple-500/10 text-white border border-purple-500/20 shadow-lg shadow-purple-500/5'
+                    : 'text-[#a1a1aa] hover:text-white hover:bg-[#18181b] border border-transparent hover:border-[#27272a]'
+                }`
+              }
+            >
+              <ShieldAlert className="w-5 h-5 flex-shrink-0" />
+              <span className="font-medium text-sm tracking-wide">Admin Dashboard</span>
+            </NavLink>
+          )}
         </nav>
 
         <div className="p-5 border-t border-[#18181b] bg-[#09090b]/50">

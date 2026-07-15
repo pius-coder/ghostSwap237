@@ -21,6 +21,7 @@ interface User {
   email: string;
   avatar?: string;
   createdAt?: string;
+  isAdmin?: boolean;
 }
 
 interface AuthContextType {
@@ -159,6 +160,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const authId = su.id;
     const canonicalId = await resolveCanonicalUserId(session, authId);
 
+    let isAdmin = false;
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', canonicalId)
+        .single();
+      
+      if (!error && data) {
+        isAdmin = data.is_admin;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch is_admin:', e);
+    }
+
     return {
       id: canonicalId,
       authId,
@@ -166,18 +182,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: su.email || '',
       avatar: su.user_metadata?.avatar_url || su.user_metadata?.picture,
       createdAt: su.created_at,
+      isAdmin,
     };
   }, []);
 
   useEffect(() => {
     // Check active session on mount
     supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
-      if (currentSession?.user) {
-        const built = await buildUser(currentSession.user, currentSession);
-        setUser(built);
-      } else {
+      try {
+        if (currentSession?.user) {
+          const built = await buildUser(currentSession.user, currentSession);
+          setUser(built);
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        console.error('Error building user on mount:', err);
         setUser(null);
+      } finally {
+        setLoading(false);
       }
+    }).catch((err) => {
+      console.error('getSession failed:', err);
+      setUser(null);
       setLoading(false);
     });
 
@@ -198,6 +225,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const built = await buildUser(currentSession.user, currentSession);
           setUser(built);
+        } catch (err) {
+          console.error('Error building user on auth change:', err);
+          setUser(null);
         } finally {
           // Allow re-resolution if the token changes later
           if (resolvingSessionRef.current === tokenKey) {
@@ -208,8 +238,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
+    const timeoutId = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
     return () => {
       subscription.unsubscribe();
+      clearTimeout(timeoutId);
     };
   }, [buildUser]);
 
@@ -263,7 +298,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -272,7 +307,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw authError;
       }
 
-      navigate(ROUTES.DEFAULT, { replace: true });
+      if (!data.user || !data.session) {
+        throw new Error('Login succeeded without an active session');
+      }
+
+      // Populate auth context before navigating. AdminDashboard reads this state
+      // immediately and would otherwise redirect while the auth listener is still
+      // resolving the user. buildUser also handles canonical IDs consistently.
+      const authenticatedUser = await buildUser(data.user, data.session);
+      setUser(authenticatedUser);
+
+      navigate(
+        authenticatedUser.isAdmin ? ROUTES.PROTECTED.ADMIN_DASHBOARD : ROUTES.DEFAULT,
+        { replace: true },
+      );
     } catch (err: any) {
       const message = err.message || 'Login failed';
       setError(message);
