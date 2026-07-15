@@ -40,6 +40,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const GOOGLE_AUTH_POPUP_NAME = 'format-boy-google-auth';
 const GOOGLE_AUTH_POPUP_WIDTH = 520;
 const GOOGLE_AUTH_POPUP_HEIGHT = 720;
+const AUTH_REQUEST_TIMEOUT_MS = 20_000;
+const PROFILE_REQUEST_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -162,11 +173,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let isAdmin = false;
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', canonicalId)
-        .single();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('users')
+          .select('is_admin')
+          .eq('id', canonicalId)
+          .single(),
+        PROFILE_REQUEST_TIMEOUT_MS,
+        'Timed out while checking administrator access',
+      );
       
       if (!error && data) {
         isAdmin = data.is_admin;
@@ -210,7 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, currentSession) => {
+      (_event, currentSession) => {
         if (!currentSession?.user) {
           setUser(null);
           setLoading(false);
@@ -222,19 +237,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (resolvingSessionRef.current === tokenKey) return;
         resolvingSessionRef.current = tokenKey;
 
-        try {
-          const built = await buildUser(currentSession.user, currentSession);
-          setUser(built);
-        } catch (err) {
-          console.error('Error building user on auth change:', err);
-          setUser(null);
-        } finally {
-          // Allow re-resolution if the token changes later
-          if (resolvingSessionRef.current === tokenKey) {
-            resolvingSessionRef.current = null;
-          }
-          setLoading(false);
-        }
+        // Supabase warns against awaiting more Supabase calls inside this
+        // callback because the auth client still holds its internal lock. Run
+        // profile resolution on the next task so signInWithPassword can finish.
+        window.setTimeout(() => {
+          void (async () => {
+            try {
+              const built = await buildUser(currentSession.user, currentSession);
+              setUser(built);
+            } catch (err) {
+              console.error('Error building user on auth change:', err);
+              setUser(null);
+            } finally {
+              if (resolvingSessionRef.current === tokenKey) {
+                resolvingSessionRef.current = null;
+              }
+              setLoading(false);
+            }
+          })();
+        }, 0);
       }
     );
 
@@ -298,10 +319,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error: authError } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+        AUTH_REQUEST_TIMEOUT_MS,
+        'Login timed out. Check your internet connection and try again.',
+      );
 
       if (authError) {
         throw authError;
