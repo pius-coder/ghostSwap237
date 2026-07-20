@@ -145,7 +145,7 @@ function Dashboard() {
     previewWindowRef.current = previewWindow;
     previewWindow.focus();
     setIsObsMode(true);
-    toast.success('OBS can now capture the "Format-Boy preview" window.');
+    toast.success('OBS can now capture the "CALL ME preview" window.');
   }, [getPreviewUrl]);
 
   const handleObsPreviewToggle = useCallback(() => {
@@ -244,7 +244,7 @@ function Dashboard() {
 
   const isVirtualCameraSource = useCallback((device: MediaDeviceInfo) => {
     const label = device.label.toLowerCase();
-    return label.includes('format-boy cam') || label.includes('windows virtual camera');
+    return label.includes('call me') || label.includes('format-boy cam') || label.includes('windows virtual camera');
   }, []);
 
   const enumerateCameras = useCallback(async () => {
@@ -897,7 +897,7 @@ function Dashboard() {
                </div>
                <div className="flex flex-col items-center gap-2">
                  <h2 className="text-lg font-semibold text-[#e5e5e5]">
-                   {user?.name ? `Welcome, ${user.name}` : 'Welcome to Format-Boy'}
+                   {user?.name ? `Welcome, ${user.name}` : 'Welcome to CALL ME'}
                  </h2>
                  <p className="text-sm text-[#71717a] text-center max-w-xs">
                    Click <span className="text-[#22C55E] font-semibold">Start</span> below to begin your AI-powered camera session

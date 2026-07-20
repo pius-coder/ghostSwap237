@@ -127,7 +127,7 @@ function extractFileName(response, version) {
     // Ignore URL parsing errors and fall back to a generated file name.
   }
 
-  return sanitizeFileName(`Format-Boy-CAM-${version}.exe`);
+  return sanitizeFileName(`CALL-ME-${version}.exe`);
 }
 
 function isProbablyMegaShare(url) {
@@ -339,7 +339,7 @@ async function installDownloadedUpdate() {
       status: 'installing',
       progress: 100,
       error: null,
-      message: 'Installing update and restarting Format-Boy Cam...',
+      message: 'Installing update and restarting CALL ME...',
     });
 
     const launchError = await shell.openPath(updateState.downloadedFilePath);
@@ -399,7 +399,7 @@ export async function checkForUpdates({ silent = false, autoDownload = true, aut
         notes: manifest.notes,
         checkedAt,
         progress: 100,
-        message: `Format-Boy Cam ${currentVersion} is up to date.`,
+        message: `CALL ME ${currentVersion} is up to date.`,
       });
     }
 

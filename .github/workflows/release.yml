@@ -102,7 +102,7 @@ jobs:
         shell: powershell
         run: |
           $version = "${{ github.ref_name }}" -replace '^v', ''
-          $expectedInstaller = "Format-Boy CAM Desktop Setup $version.exe"
+          $expectedInstaller = "CALL ME Setup $version.exe"
 
           Write-Host "Listing ./app/release folder:"
           Get-ChildItem -Path "./app/release" -Recurse | Select-Object FullName | Format-List
@@ -132,7 +132,7 @@ jobs:
         with:
           files: ${{ steps.find_installer.outputs.exe_path }}
           body: |
-            ## Format-Boy Desktop ${{ github.ref_name }}
+            ## CALL ME ${{ github.ref_name }}
             
             **SHA256:** `${{ steps.sha256.outputs.hash }}`
         env:

@@ -342,7 +342,7 @@ function createWindow() {
         overrideBrowserWindowOptions: {
           width: 1280,
           height: 720,
-          title: 'Format-Boy preview',
+          title: 'CALL ME preview',
           autoHideMenuBar: true,
           backgroundColor: '#000000',
           webPreferences: {

@@ -1,12 +1,12 @@
 {
-    "name": "my-app",
+    "name": "call-me",
     "private": true,
-    "version": "2.0.12",
+    "version": "2.0.13",
     "type": "module",
     "main": "electron/main.js",
     "build": {
         "appId": "com.formatboy.app",
-        "productName": "Format-Boy CAM Desktop",
+        "productName": "CALL ME",
         "directories": {
             "output": "release"
         },
@@ -25,7 +25,7 @@
             "target": [
                 "nsis"
             ],
-            "executableName": "Format-Boy-Desktop",
+            "executableName": "CALL-ME",
             "icon": "public/icon.ico"
         },
         "nsis": {

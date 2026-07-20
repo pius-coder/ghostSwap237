@@ -24,7 +24,7 @@ DEFINE_GUID(CLSID_FormatBoyVirtualCameraDS,
 // ---------------------------------------------------------------------------
 // Camera identity strings
 // ---------------------------------------------------------------------------
-static const wchar_t kCameraFriendlyName[] = L"Format-Boy CAM";
+static const wchar_t kCameraFriendlyName[] = L"CALL ME";
 static const wchar_t kMFDllName[]          = L"FormatBoyVirtualCameraMF.dll";
 static const wchar_t kDSDllName[]          = L"FormatBoyVirtualCamera.dll";
 static const wchar_t kPublisherExeName[]   = L"formatboy_cam_pipe_publisher.exe";

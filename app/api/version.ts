@@ -8,8 +8,8 @@ const FALLBACK_ARTIFACT_TYPE = 'installer';
 const DEFAULT_SIGNED_URL_EXPIRES = 60 * 60 * 2;
 const DEFAULT_GITHUB_OWNER = 'samuellucky2424-afk';
 const DEFAULT_GITHUB_REPO = 'Format-Boy.Cam';
-const DEFAULT_GITHUB_EXE_PATTERN = '^Format-Boy[ .]CAM[ .]Desktop[ .]Setup[ .].*\\.exe$';
-const GITHUB_NORMALIZED_EXE_PATTERN = /^Format-Boy[ .]CAM[ .]Desktop[ .]Setup[ .].*\.exe$/i;
+const DEFAULT_GITHUB_EXE_PATTERN = '^CALL[ .]ME[ .]Setup[ .].*\\.exe$';
+const GITHUB_NORMALIZED_EXE_PATTERN = /^CALL[ .]ME[ .]Setup[ .].*\.exe$/i;
 
 function trimSlashes(value = '') {
   return String(value).replace(/^\/+|\/+$/g, '').trim();

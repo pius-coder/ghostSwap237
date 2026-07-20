@@ -146,7 +146,7 @@ function Settings() {
         <Card className="bg-gradient-to-br from-[#131316] to-[#0f0f10] border-[#1f1f23] overflow-hidden rounded-2xl shadow-2xl shadow-black/20">
           <CardHeader className="border-b border-[#1f1f23]">
             <CardTitle className="text-lg font-semibold text-white tracking-tight">Desktop Updates</CardTitle>
-            <CardDescription className="text-xs text-[#71717a]">Keep Format-Boy Cam current without re-downloading the installer manually</CardDescription>
+            <CardDescription className="text-xs text-[#71717a]">Keep CALL ME current without re-downloading the installer manually</CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

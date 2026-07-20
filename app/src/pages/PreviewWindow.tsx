@@ -6,7 +6,7 @@ function PreviewWindow() {
   const [hasStream, setHasStream] = useState(false);
 
   useEffect(() => {
-    document.title = 'Format-Boy preview';
+    document.title = 'CALL ME preview';
   }, []);
 
   useEffect(() => {
@@ -69,7 +69,7 @@ function PreviewWindow() {
       {!hasStream && (
         <div className="w-full h-full flex items-center justify-center bg-black text-center px-6">
           <div className="max-w-md">
-            <h1 className="text-white text-3xl font-semibold tracking-[0.08em] uppercase">Format-Boy preview</h1>
+            <h1 className="text-white text-3xl font-semibold tracking-[0.08em] uppercase">CALL ME preview</h1>
             <p className="mt-4 text-sm text-[#A1A1AA]">
               Waiting for the live output stream. Open this window from the dashboard OBS Preview button and start streaming.
             </p>

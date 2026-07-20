@@ -46,7 +46,7 @@ export function UpdateModal() {
           </div>
           <DialogTitle className="text-xl text-center text-white font-bold tracking-tight">Update Available</DialogTitle>
           <DialogDescription className="text-center text-[#a1a1aa] pt-2">
-            A new version of Format-Boy Cam is ready to install!
+            A new version of CALL ME is ready to install!
           </DialogDescription>
         </DialogHeader>
         

@@ -722,7 +722,7 @@ static int CmdInstall(bool allUsers) {
 
     MFShutdown();
     CoUninitialize();
-    wprintf(L"[OK] Format-Boy CAM installed successfully\n");
+    wprintf(L"[OK] CALL ME installed successfully\n");
     return 0;
 }
 
@@ -766,7 +766,7 @@ static int CmdRemove(bool unregisterCom) {
 
     MFShutdown();
     CoUninitialize();
-    wprintf(L"[OK] Format-Boy CAM removed\n");
+    wprintf(L"[OK] CALL ME removed\n");
     return 0;
 }
 
@@ -857,7 +857,7 @@ static int CmdProbe() {
     CoUninitialize();
 
     if (healthy) {
-        wprintf(L"[PROBE OK] Format-Boy CAM registration is healthy\n");
+        wprintf(L"[PROBE OK] CALL ME registration is healthy\n");
         return 0;
     }
     return 1;

@@ -74,7 +74,7 @@ export default function Sidebar() {
               <img src="./logo.png" alt="Logo" className="w-full h-full object-cover" />
             </div>
             <div>
-              <span className="text-lg font-bold text-white tracking-tight">Format-Boy.CAM</span>
+              <span className="text-lg font-bold text-white tracking-tight">CALL ME</span>
               <p className="text-[10px] text-[#71717a] -mt-0.5 tracking-wide uppercase font-semibold">AI Streaming</p>
             </div>
           </div>
