@@ -302,6 +302,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
 
       ipcRenderer.on('oauth-callback', handler);
+      ipcRenderer.send('oauth-callback-ready');
       return () => {
         ipcRenderer.removeListener('oauth-callback', handler);
       };

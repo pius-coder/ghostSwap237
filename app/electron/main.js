@@ -185,6 +185,8 @@ const __dirname = path.dirname(__filename);
 let mainWindow = null;
 let authWindow = null;
 let authCallbackHandled = false;
+let pendingOAuthCallbackUrl = null;
+let oauthRendererReady = false;
 
 // Keep the WebRTC encoder on the safer software path. The receive/decode side
 // still benefits from normal Chromium GPU acceleration in Electron.
@@ -222,19 +224,25 @@ function closeAuthWindow() {
   authWindow = null;
 }
 
+function flushPendingOAuthCallback() {
+  if (!pendingOAuthCallbackUrl || !oauthRendererReady || !mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.webContents.isLoadingMainFrame()) return;
+
+  const callbackUrl = pendingOAuthCallbackUrl;
+  pendingOAuthCallbackUrl = null;
+  mainWindow.webContents.send('oauth-callback', callbackUrl);
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+}
+
 function handleOAuthCallback(url) {
   if (!isOAuthCallbackUrl(url)) return;
-  if (authCallbackHandled) return;
+  if (authCallbackHandled && pendingOAuthCallbackUrl === url) return;
 
   authCallbackHandled = true;
-
+  pendingOAuthCallbackUrl = url;
   closeAuthWindow();
-
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('oauth-callback', url);
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  }
+  flushPendingOAuthCallback();
 }
 
 function createAuthWindow(url) {
@@ -333,6 +341,7 @@ function createWindow() {
     }
   });
 
+  oauthRendererReady = false;
   mainWindow.removeMenu();
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -399,9 +408,17 @@ ipcMain.on('open-external', (_event, url) => {
   shell.openExternal(url);
 });
 
-// Open the native Google auth popup inside the app.
+// Google blocks OAuth in embedded user agents, so use the system browser.
 ipcMain.on('open-auth-popup', (_event, url) => {
-  createAuthWindow(url);
+  if (!url) return;
+  shell.openExternal(url).catch((error) => {
+    console.error('[oauth] Failed to open the system browser:', error);
+  });
+});
+
+ipcMain.on('oauth-callback-ready', () => {
+  oauthRendererReady = true;
+  flushPendingOAuthCallback();
 });
 
 // Toggle window ghost mode (exclude from screen capture)
@@ -464,6 +481,12 @@ app.whenReady().then(async () => {
   if (process.platform === 'win32') {
     ensureVCamRegistration();
     startVCamPublisher();
+  }
+
+  const initialDeepLink = process.argv.find((arg) => arg.startsWith('formatboy://'));
+  if (initialDeepLink) {
+    authCallbackHandled = true;
+    pendingOAuthCallbackUrl = initialDeepLink;
   }
 
   createWindow();
