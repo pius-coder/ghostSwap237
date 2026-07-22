@@ -855,8 +855,7 @@ function Dashboard() {
       <header className="flex items-center justify-between px-6 py-4 flex-shrink-0 relative z-10 app-region-drag">
         <div className="flex items-center gap-[2px]">
           <img src="./logo.png" alt="Logo" className="w-8 h-8 object-cover rounded-full mr-2" />
-          <span className="text-xl font-bold tracking-widest text-[#FFFFFF]">FORMAT-BOY</span>
-          <span className="text-xl font-medium tracking-widest text-[#71717A]">.CAM</span>
+          <span className="text-xl font-bold tracking-widest text-[#FFFFFF]">CALL ME</span>
         </div>
         <div className="flex items-center gap-1 app-region-no-drag">
           <button title="Minimize" aria-label="Minimize" onClick={() => handleWindowControl('minimize')} className="p-2 text-[#71717A] hover:text-white transition-colors focus:outline-none">
