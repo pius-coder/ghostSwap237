@@ -324,6 +324,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
+    minWidth: 800,
+    minHeight: 600,
     frame: false,
     autoHideMenuBar: true,
     backgroundColor: '#111111',
@@ -343,6 +345,25 @@ function createWindow() {
 
   oauthRendererReady = false;
   mainWindow.removeMenu();
+
+  const rendererSession = mainWindow.webContents.session;
+  const isMainRenderer = (webContents) =>
+    Boolean(webContents && mainWindow && webContents.id === mainWindow.webContents.id);
+
+  // Electron permissions and Windows camera privacy are separate layers. Grant
+  // video access to our own renderer so getUserMedia can reveal every physical
+  // camera consistently; Windows still enforces the user's OS privacy choice.
+  rendererSession.setPermissionCheckHandler((webContents, permission, _origin, details) => {
+    const isVideoRequest = !details?.mediaType || details.mediaType !== 'audio';
+    return permission === 'media' && isVideoRequest && isMainRenderer(webContents);
+  });
+  rendererSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const requestedMediaTypes = details?.mediaTypes || [];
+    const isVideoOnlyRequest =
+      requestedMediaTypes.length === 0 ||
+      (requestedMediaTypes.includes('video') && !requestedMediaTypes.includes('audio'));
+    callback(permission === 'media' && isVideoOnlyRequest && isMainRenderer(webContents));
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.includes('#/preview')) {

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Play, Square, Clock, Zap, Monitor, Plus, Coins, Minus, X, Settings, Eye, EyeOff } from 'lucide-react';
+import { Upload, Play, Square, Clock, Zap, Monitor, Plus, Coins, Minus, X, Settings, Eye, EyeOff, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useApp } from '@/context/AppContext';
@@ -25,6 +25,23 @@ const DECART_REALTIME_HEIGHT = 720;
 const DECART_REALTIME_FPS = 20;
 const REMOTE_VIDEO_READY_TIMEOUT_MS = 3000;
 const REMOTE_VIDEO_VISIBLE_TIMEOUT_MS = 15000;
+
+function isVirtualCameraSource(device: MediaDeviceInfo) {
+  const label = device.label.toLowerCase();
+  return label.includes('call me') || label.includes('format-boy cam') || label.includes('windows virtual camera');
+}
+
+function getPreferredCameraId(devices: MediaDeviceInfo[]) {
+  const builtin = devices.find((device) => {
+    const label = device.label.toLowerCase();
+    return label.includes('integrated') ||
+      label.includes('built-in') ||
+      label.includes('facetime') ||
+      label.includes('internal');
+  });
+
+  return builtin?.deviceId || devices[0]?.deviceId || '';
+}
 
 async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await apiFetch(endpoint, {
@@ -86,8 +103,9 @@ function Dashboard() {
   const [isGhostMode, setIsGhostMode] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-    const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
+  const [cameraDiscoveryMessage, setCameraDiscoveryMessage] = useState('Finding cameras...');
   // Default prompt since the new UI doesn't have an input field yet
   const [prompt] = useState('A person looking professional');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -242,45 +260,112 @@ function Dashboard() {
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const isVirtualCameraSource = useCallback((device: MediaDeviceInfo) => {
-    const label = device.label.toLowerCase();
-    return label.includes('call me') || label.includes('format-boy cam') || label.includes('windows virtual camera');
-  }, []);
-
-  const enumerateCameras = useCallback(async () => {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices
-        .filter(d => d.kind === 'videoinput')
-        .filter(d => !isVirtualCameraSource(d));
-
-      setCameraDevices(videoDevices);
-
-      const selectedStillAvailable = videoDevices.some((device) => device.deviceId === selectedCameraId);
-      if (selectedCameraId && !selectedStillAvailable) {
-        setSelectedCameraId('');
-      }
-
-      if (videoDevices.length > 0 && (!selectedCameraId || !selectedStillAvailable)) {
-        const builtin = videoDevices.find(d =>
-          d.label.toLowerCase().includes('integrated') ||
-          d.label.toLowerCase().includes('built-in') ||
-          d.label.toLowerCase().includes('facetime') ||
-          d.label.toLowerCase().includes('internal')
-        );
-
-        setSelectedCameraId(builtin?.deviceId || videoDevices[0].deviceId);
-      }
-    } catch (err) {
-      console.error('Failed to enumerate cameras:', err);
-    }
-  }, [isVirtualCameraSource, selectedCameraId]);
-
   useEffect(() => {
-    enumerateCameras();
-    navigator.mediaDevices.addEventListener('devicechange', enumerateCameras);
-    return () => navigator.mediaDevices.removeEventListener('devicechange', enumerateCameras);
-  }, [enumerateCameras]);
+    const mediaDevices = navigator.mediaDevices;
+    let isCancelled = false;
+
+    if (!mediaDevices?.enumerateDevices || !mediaDevices?.getUserMedia) {
+      setCameraDiscoveryMessage('Camera access is unavailable');
+      return;
+    }
+
+    const applyCameraList = (devices: MediaDeviceInfo[]) => {
+      const videoDevices = devices
+        .filter((device) => device.kind === 'videoinput')
+        .filter((device) => !isVirtualCameraSource(device));
+
+      if (!isCancelled) {
+        setCameraDevices(videoDevices);
+        setCameraDiscoveryMessage(videoDevices.length > 0 ? '' : 'No camera detected');
+        setSelectedCameraId((currentCameraId) => {
+          const selectedStillAvailable = videoDevices.some(
+            (device) => device.deviceId === currentCameraId
+          );
+          return selectedStillAvailable ? currentCameraId : getPreferredCameraId(videoDevices);
+        });
+      }
+
+      return videoDevices;
+    };
+
+    const enumerateCameras = async () => {
+      const devices = await mediaDevices.enumerateDevices();
+      return {
+        allVideoDevices: devices.filter((device) => device.kind === 'videoinput'),
+        selectableCameras: applyCameraList(devices)
+      };
+    };
+
+    const refreshCameras = async () => {
+      try {
+        await enumerateCameras();
+      } catch (error) {
+        console.error('Failed to enumerate cameras:', error);
+        if (!isCancelled) {
+          setCameraDevices([]);
+          setSelectedCameraId('');
+          setCameraDiscoveryMessage('Could not load cameras');
+        }
+      }
+    };
+
+    const initializeCameras = async () => {
+      try {
+        const initialResult = await enumerateCameras();
+        const permissionIsNeeded =
+          initialResult.allVideoDevices.length === 0 ||
+          initialResult.allVideoDevices.some((device) => !device.label);
+
+        if (!permissionIsNeeded) {
+          return;
+        }
+
+        // Chromium hides non-default cameras and their labels before camera
+        // permission is granted. Open and immediately close a temporary stream
+        // so the following enumeration includes USB and built-in cameras.
+        let permissionStream: MediaStream | null = null;
+        try {
+          permissionStream = await mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+        } catch (error) {
+          console.warn('Camera permission was not granted during discovery:', error);
+          if (!isCancelled) {
+            setCameraDiscoveryMessage(
+              initialResult.selectableCameras.length > 0
+                ? 'Allow camera access to show every camera'
+                : 'Camera permission is required'
+            );
+          }
+          return;
+        } finally {
+          permissionStream?.getTracks().forEach((track) => track.stop());
+        }
+
+        await enumerateCameras();
+      } catch (error) {
+        console.error('Failed to initialize cameras:', error);
+        if (!isCancelled) {
+          setCameraDevices([]);
+          setSelectedCameraId('');
+          setCameraDiscoveryMessage('Could not load cameras');
+        }
+      }
+    };
+
+    const handleDeviceChange = () => {
+      void refreshCameras();
+    };
+
+    void initializeCameras();
+    mediaDevices.addEventListener('devicechange', handleDeviceChange);
+
+    return () => {
+      isCancelled = true;
+      mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
+  }, []);
 
     useEffect(() => {
     if (isStreaming && outputVideoRef.current) {
@@ -922,11 +1007,11 @@ function Dashboard() {
 
       {/* Bottom Bar */}
       <footer className="h-[52px] bg-[#0A0A0A] flex items-stretch justify-between px-0 flex-shrink-0 relative z-10">
-         <div className="flex items-center gap-1.5 px-4">
+         <div className="flex min-w-0 flex-1 items-center gap-1.5 px-3">
             <button 
               onClick={handleStart}
               disabled={isStreaming || isLoading}
-              className={`h-[34px] px-3.5 rounded-sm flex items-center gap-2 border transition-all ${
+              className={`h-[34px] shrink-0 px-3.5 rounded-sm flex items-center gap-2 border transition-all ${
                 isStreaming 
                   ? 'bg-[#122A1F] border-[#133C29] text-[#22C55E] opacity-50' 
                   : 'bg-[#122A1F] border-[#133C29] text-[#22C55E] hover:bg-[#153828]'
@@ -939,70 +1024,84 @@ function Dashboard() {
             <button 
               onClick={() => { void handleStop(); }}
               disabled={!isStreaming}
-              className="h-[34px] px-3.5 flex items-center gap-2 rounded-sm border bg-[#1E1E1E] border-[#2A2A2A] text-[#737373] hover:text-[#A3A3A3] transition-all"
+              className="h-[34px] shrink-0 px-3.5 flex items-center gap-2 rounded-sm border bg-[#1E1E1E] border-[#2A2A2A] text-[#737373] hover:text-[#A3A3A3] transition-all"
             >
               <Square className="w-3.5 h-3.5 fill-current opacity-70" />
               <span className="font-medium text-[13px]">Stop</span>
             </button>
 
+            <div className="ml-1 flex h-[34px] min-w-[140px] max-w-[220px] flex-1 items-center rounded-sm border border-[#2A2A2A] bg-[#1E1E1E] text-[#A3A3A3] focus-within:border-[#3A3A3A]">
+              <Camera className="ml-2 h-3.5 w-3.5 shrink-0 opacity-80" />
+              <select
+                value={selectedCameraId}
+                onChange={(event) => setSelectedCameraId(event.target.value)}
+                disabled={cameraDevices.length === 0 || isStreaming || isLoading}
+                title={isStreaming ? 'Stop the session to change camera' : cameraDiscoveryMessage || 'Select camera'}
+                aria-label="Camera input"
+                className="h-full min-w-0 flex-1 cursor-pointer bg-transparent px-2 text-[12px] text-[#A3A3A3] focus:outline-none disabled:cursor-not-allowed disabled:text-[#666666]"
+              >
+                {cameraDevices.length === 0 ? (
+                  <option value="">{cameraDiscoveryMessage}</option>
+                ) : (
+                  cameraDevices.map((device, index) => (
+                    <option
+                      key={device.deviceId || `${device.groupId}-${index}`}
+                      value={device.deviceId}
+                    >
+                      {device.label || `Camera ${index + 1}`}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
             <button 
               onClick={handleObsPreviewToggle}
-              className={`h-[34px] px-3.5 flex items-center gap-2 rounded-sm border transition-all ml-2 ${
+              title={isObsMode ? 'Close OBS preview' : 'Open OBS preview'}
+              className={`h-[34px] shrink-0 px-3 flex items-center gap-2 rounded-sm border transition-all ml-1 ${
                 isObsMode
                   ? 'bg-[#122A1F] border-[#133C29] text-[#22C55E]'
                   : 'bg-[#1E1E1E] border-[#2A2A2A] text-[#737373] hover:text-[#A3A3A3]'
               }`}
             >
               <Monitor className="w-3.5 h-3.5 opacity-80" />
-              <span className="font-medium text-[13px]">{isObsMode ? 'OBS Preview On' : 'OBS Preview'}</span>
+              <span className="hidden font-medium text-[13px] min-[1200px]:inline">{isObsMode ? 'OBS Preview On' : 'OBS Preview'}</span>
             </button>
 
              <button 
                onClick={handleGhostModeToggle}
                title={isGhostMode ? "Make app visible to OBS again" : "Hide app from OBS Screen Capture"}
-               className={`h-[34px] px-3.5 flex items-center gap-2 rounded-sm border transition-all ml-2 ${
+               className={`h-[34px] shrink-0 px-3 flex items-center gap-2 rounded-sm border transition-all ml-1 ${
                  isGhostMode
                    ? 'bg-[#2A1215] border-[#3C1318] text-[#EF4444]'
                    : 'bg-[#1E1E1E] border-[#2A2A2A] text-[#737373] hover:text-[#A3A3A3]'
                }`}
              >
                {isGhostMode ? <EyeOff className="w-3.5 h-3.5 opacity-80" /> : <Eye className="w-3.5 h-3.5 opacity-80" />}
-               <span className="font-medium text-[13px]">{isGhostMode ? 'Ghost Mode On' : 'Ghost Mode'}</span>
+               <span className="hidden font-medium text-[13px] min-[1200px]:inline">{isGhostMode ? 'Ghost Mode On' : 'Ghost Mode'}</span>
              </button>
 
              <button 
                onClick={() => fileInputRef.current?.click()}
-               className="h-[34px] px-3.5 flex items-center gap-2 rounded-sm border bg-[#1E1E1E] border-[#2A2A2A] text-[#737373] hover:text-[#A3A3A3] transition-all ml-2"
+               title={uploadedImage ? 'Change image' : 'Upload image'}
+               className="h-[34px] shrink-0 px-3 flex items-center gap-2 rounded-sm border bg-[#1E1E1E] border-[#2A2A2A] text-[#737373] hover:text-[#A3A3A3] transition-all ml-1"
              >
                <Upload className="w-3.5 h-3.5 opacity-80" />
-               <span className="font-medium text-[13px]">{uploadedImage ? 'Change Image' : 'Upload Image'}</span>
+               <span className="hidden font-medium text-[13px] min-[1200px]:inline">{uploadedImage ? 'Change Image' : 'Upload Image'}</span>
              </button>
-
-            {cameraDevices.length > 1 && (
-              <select
-                value={selectedCameraId}
-                onChange={(e) => setSelectedCameraId(e.target.value)}
-                title="Select camera"
-                className="h-[34px] px-2 rounded-sm border bg-[#1E1E1E] border-[#2A2A2A] text-[#A3A3A3] text-[12px] ml-1 cursor-pointer focus:outline-none focus:border-[#3A3A3A]"
-              >
-                {cameraDevices.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label || `Camera ${cameraDevices.indexOf(device) + 1}`}
-                  </option>
-                ))}
-              </select>
-            )}
          </div>
 
-         <div className="flex items-center h-full">
-             <div className="flex items-center h-full gap-2 px-5">
-                <Zap className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B]" />
-                <div className="flex flex-col justify-center gap-[2px]">
+         <div className="flex shrink-0 items-center h-full">
+             <div className="flex items-center h-full gap-2 px-3 min-[1360px]:px-5">
+                <div className="hidden items-center gap-2 min-[1360px]:flex">
+                  <Zap className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B]" />
+                  <div className="flex flex-col justify-center gap-[2px]">
                    <span className="text-[8px] text-[#A1A1AA] font-bold tracking-widest uppercase">Usage Rate</span>
                    <div className="flex items-baseline gap-1">
                       <span className="text-xs font-bold text-[#E5E5E5] uppercase">2 credits</span>
                       <span className="text-[9px] text-[#737373] font-medium">/sec</span>
                    </div>
+                  </div>
                 </div>
                 <button
                   onClick={() => navigate(ROUTES.PROTECTED.SETTINGS)}
@@ -1014,7 +1113,7 @@ function Dashboard() {
                 </button>
              </div>
             
-            <div className="flex items-center h-full gap-3 px-5 border-l border-[#222222]">
+            <div className="flex items-center h-full gap-3 px-3 border-l border-[#222222] min-[1200px]:px-5">
                <div className="flex flex-col justify-center gap-[2px]">
                   <span className="text-[8px] text-[#A1A1AA] font-bold tracking-widest uppercase">Credits</span>
                   <div className="flex items-center gap-1.5">
@@ -1031,7 +1130,7 @@ function Dashboard() {
                </button>
             </div>
 
-            <div className="flex items-center h-full gap-3 px-5 border-l border-[#0F284B] bg-[#0E1524] min-w-[140px]">
+            <div className="hidden items-center h-full gap-3 px-5 border-l border-[#0F284B] bg-[#0E1524] min-w-[140px] min-[1000px]:flex">
                <Clock className="w-4 h-4 text-[#3B82F6] stroke-[2.5]" />
                <div className="flex flex-col justify-center gap-[2px]">
                   <span className="text-[8px] text-[#60A5FA] font-bold tracking-widest uppercase">Remaining</span>
