@@ -20,6 +20,7 @@ interface PaymentMethod {
   wallet_address: string;
   qr_code_url?: string | null;
   instructions?: string | null;
+  updated_at?: string | null;
 }
 
 export function CryptoPaymentModal({ isOpen, onClose, plan }: CryptoPaymentModalProps) {
@@ -36,32 +37,43 @@ export function CryptoPaymentModal({ isOpen, onClose, plan }: CryptoPaymentModal
   useEffect(() => {
     if (!isOpen) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
     setIsLoadingMethod(true);
     setPaymentMethods([]);
     setSelectedPaymentMethodId(null);
     setCopied(false);
-    supabase
-      .from('payment_methods')
-      .select('id, name, crypto_currency, network, wallet_address, qr_code_url, instructions')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error('Failed to load payment methods:', error);
-          toast.error('Payment details are currently unavailable.');
-          setPaymentMethods([]);
-          setSelectedPaymentMethodId(null);
-        } else {
-          const methods = (data || []) as PaymentMethod[];
-          setPaymentMethods(methods);
-          setSelectedPaymentMethodId(methods[0]?.id || null);
+
+    void fetch(getApiUrl('/payment-methods'), {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(result.error || 'Could not load payment details.');
         }
+        return (result.paymentMethods || []) as PaymentMethod[];
+      })
+      .then((methods) => {
+        if (controller.signal.aborted) return;
+        setPaymentMethods(methods);
+        setSelectedPaymentMethodId(methods[0]?.id || null);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        console.error('Failed to load payment methods:', error);
+        toast.error('Payment details are currently unavailable.');
+        setPaymentMethods([]);
+        setSelectedPaymentMethodId(null);
+      })
+      .finally(() => {
+        if (controller.signal.aborted) return;
         setIsLoadingMethod(false);
       });
 
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, [isOpen]);
 
   if (!isOpen || !plan || !user) return null;
@@ -124,9 +136,16 @@ export function CryptoPaymentModal({ isOpen, onClose, plan }: CryptoPaymentModal
     }
   };
 
+  const generatedQrUrl = paymentMethod
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(paymentMethod.wallet_address)}`
+    : '';
+  const paymentQrUrl = paymentMethod?.qr_code_url
+    ? `${paymentMethod.qr_code_url}${paymentMethod.qr_code_url.includes('?') ? '&' : '?'}v=${encodeURIComponent(paymentMethod.updated_at || paymentMethod.id)}`
+    : generatedQrUrl;
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#131316] border border-[#27272a] rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+    <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-[#131316] border border-[#27272a] rounded-2xl p-6 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain shadow-2xl relative">
         <button
           onClick={() => {
             if (!isProcessing) onClose();
@@ -209,9 +228,14 @@ export function CryptoPaymentModal({ isOpen, onClose, plan }: CryptoPaymentModal
             {paymentMethod && (
               <div className="bg-white p-4 rounded-xl mb-4 flex items-center justify-center">
                 <img
-                  src={paymentMethod.qr_code_url || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(paymentMethod.wallet_address)}`}
+                  src={paymentQrUrl}
                   alt={`${paymentMethod.name} QR Code`}
                   className="w-48 h-48 object-contain"
+                  onError={(event) => {
+                    if (event.currentTarget.src !== generatedQrUrl) {
+                      event.currentTarget.src = generatedQrUrl;
+                    }
+                  }}
                 />
               </div>
             )}

@@ -2,10 +2,14 @@
 import { supabaseAdmin, supabaseAdminConfigError } from './supabase.js';
 import { getWalletByUserId } from './credit-utils.js';
 import cryptoSubmitHandler from '../server/crypto-submit.js';
+import paymentMethodsHandler from '../server/payment-methods.js';
 
 export default async function handler(req, res) {
   if (req.query?.action === 'crypto-submit') {
     return cryptoSubmitHandler(req, res);
+  }
+  if (req.query?.action === 'payment-methods') {
+    return paymentMethodsHandler(req, res);
   }
 
   res.setHeader("Access-Control-Allow-Origin", "*");

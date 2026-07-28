@@ -7,6 +7,10 @@
     {
       "source": "/api/payment/crypto-submit",
       "destination": "/api/wallet?action=crypto-submit"
+    },
+    {
+      "source": "/api/payment-methods",
+      "destination": "/api/wallet?action=payment-methods"
     }
   ]
 }

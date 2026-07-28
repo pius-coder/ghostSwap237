@@ -13,6 +13,7 @@ import version from '../api/version.ts';
 import wallet from '../api/wallet.ts';
 import cryptoSubmit from '../server/crypto-submit.ts';
 import morphlyToken from '../server/morphly-token.ts';
+import paymentMethods from '../server/payment-methods.ts';
 
 const app = express();
 const port = Number(process.env.FORMAT_BOY_LOCAL_API_PORT || 3001);
@@ -27,6 +28,7 @@ function mount(path, handler) {
 
 mount('/api/auth/resolve-user', resolveUser);
 mount('/api/payment/crypto-submit', cryptoSubmit);
+mount('/api/payment-methods', paymentMethods);
 mount('/api/end-session', endSession);
 mount('/api/morphly-token', morphlyToken);
 mount('/api/payment/paystack-init', paystackInit);
