@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { supabaseAdmin, supabaseAdminConfigError } from './supabase.js';
-import { getWalletByUserId } from './credit-utils.js';
+import { supabaseAdmin, supabaseAdminConfigError } from '../api/supabase.js';
+import { getWalletByUserId } from '../api/credit-utils.js';
 
 const MORPHLY_SESSION_URL = 'https://api.morphly.fun/v1/realtime/sessions';
 const MORPHLY_REALTIME_MODEL = 'lucy-2.5';

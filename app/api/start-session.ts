@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabaseAdmin, supabaseAdminConfigError } from './supabase.js';
 import { getWalletByUserId, logCreditUpdate, updateWalletCredits } from './credit-utils.js';
+import morphlyTokenHandler from '../server/morphly-token.js';
 
 const CREDITS_PER_SECOND = 2;
 const MAX_SESSION_DURATION = 600;
@@ -80,6 +81,10 @@ async function closeActiveSession(userId, activeSession) {
 }
 
 export default async function handler(req, res) {
+  if (req.query?.action === 'morphly-token') {
+    return morphlyTokenHandler(req, res);
+  }
+
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");

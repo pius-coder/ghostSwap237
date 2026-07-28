@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/morphly-token",
+      "destination": "/api/start-session?action=morphly-token"
+    },
+    {
+      "source": "/api/payment/crypto-submit",
+      "destination": "/api/wallet?action=crypto-submit"
+    }
+  ]
+}

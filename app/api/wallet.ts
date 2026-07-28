@@ -1,8 +1,13 @@
 // @ts-nocheck
 import { supabaseAdmin, supabaseAdminConfigError } from './supabase.js';
 import { getWalletByUserId } from './credit-utils.js';
+import cryptoSubmitHandler from '../server/crypto-submit.js';
 
 export default async function handler(req, res) {
+  if (req.query?.action === 'crypto-submit') {
+    return cryptoSubmitHandler(req, res);
+  }
+
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");

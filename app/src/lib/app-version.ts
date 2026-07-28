@@ -1,4 +1,4 @@
-export const CURRENT_VERSION = '2.0.17';
+export const CURRENT_VERSION = '2.0.18';
 
 export type DesktopArtifactType = 'portable' | 'installer';
 

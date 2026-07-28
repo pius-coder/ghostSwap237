@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { supabaseAdmin, supabaseAdminConfigError } from '../supabase.js';
+import { supabaseAdmin, supabaseAdminConfigError } from '../api/supabase.js';
 
 function getBearerToken(req) {
   const authHeader = String(req.headers?.authorization || '');
