@@ -42,7 +42,9 @@ export class VirtualCameraService {
   // Width / height of the virtual camera output (must match kDefaultWidth/Height in C++)
   static readonly WIDTH  = 1280;
   static readonly HEIGHT = 720;
-  static readonly FPS    = 15;
+  // The Windows virtual-camera driver advertises 30 fps. Publishing at 15 fps
+  // made every second frame a duplicate and produced visibly choppy output.
+  static readonly FPS    = 30;
   static readonly FRAME_INTERVAL_MS = 1000 / VirtualCameraService.FPS;
 
   // Legacy MediaStream capture — kept for browser/non-Electron environments
@@ -136,7 +138,7 @@ export class VirtualCameraService {
       this._notReadyCount++;
       const warnEvery = Math.max(1, VirtualCameraService.FPS * 2);
       // Keep sending the current canvas frame so WhatsApp receives a stable
-      // camera stream while the Decart video is warming up or recovering.
+      // camera stream while the Morphly video is warming up or recovering.
       if (this._notReadyCount % warnEvery === 1) {
         console.warn(
           `[VirtualCameraService] source video not ready ` +
@@ -151,10 +153,24 @@ export class VirtualCameraService {
     } else {
       this._notReadyCount = 0;
       try {
-        // Stretch to the camera resolution (1280×720)
+        // Preserve the Morphly frame's aspect ratio instead of stretching it.
+        const scale = Math.min(
+          VirtualCameraService.WIDTH / video.videoWidth,
+          VirtualCameraService.HEIGHT / video.videoHeight,
+        );
+        const drawWidth = Math.round(video.videoWidth * scale);
+        const drawHeight = Math.round(video.videoHeight * scale);
+        const drawX = Math.floor((VirtualCameraService.WIDTH - drawWidth) / 2);
+        const drawY = Math.floor((VirtualCameraService.HEIGHT - drawHeight) / 2);
+
+        this._ctx.fillStyle = 'black';
+        this._ctx.fillRect(0, 0, VirtualCameraService.WIDTH, VirtualCameraService.HEIGHT);
         this._ctx.drawImage(
-          video, 0, 0,
-          VirtualCameraService.WIDTH, VirtualCameraService.HEIGHT,
+          video,
+          drawX,
+          drawY,
+          drawWidth,
+          drawHeight,
         );
         this._drawFailureCount = 0;
       } catch (err) {

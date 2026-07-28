@@ -157,7 +157,7 @@ function Wallet() {
             </Button>
 
             <p className="text-xs text-[#52525b] text-center mt-3">
-              You&apos;ll be asked to send USDT (ERC20) to complete the purchase
+              Choose from the active payment methods configured by the administrator
             </p>
           </CardContent>
         </Card>

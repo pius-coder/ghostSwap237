@@ -1,4 +1,6 @@
-import { app, BrowserWindow, systemPreferences, ipcMain, shell } from 'electron';
+
+import electronPkg from 'electron';
+const { app, BrowserWindow, systemPreferences, ipcMain, shell } = electronPkg;
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -15,7 +17,7 @@ const PIPE_FRAME_MAGIC    = 0x4642434D; // "FBCM"
 const PIPE_PROTOCOL_VER   = 1;
 const VCAM_FRAME_WIDTH    = 1280;
 const VCAM_FRAME_HEIGHT   = 720;
-const VCAM_FPS            = 15;
+const VCAM_FPS            = 30;
 const VCAM_FRAME_STRIDE   = VCAM_FRAME_WIDTH * 4;
 const VCAM_FRAME_BYTES    = VCAM_FRAME_STRIDE * VCAM_FRAME_HEIGHT;
 

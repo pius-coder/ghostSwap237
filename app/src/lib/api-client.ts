@@ -8,6 +8,13 @@ function normalizeApiBase(value?: string | null): string | null {
 }
 
 function getApiBase(): string {
+  // During development, keep browser requests on the page's current origin.
+  // Vite can proxy /api when it runs alone, while `vercel dev` serves the
+  // functions directly. This also avoids localhost/127.0.0.1 mismatches.
+  if (import.meta.env.DEV) {
+    return '/api';
+  }
+
   const configuredBase = normalizeApiBase(import.meta.env.VITE_API_BASE_URL);
   if (configuredBase) {
     return `${configuredBase}/api`;
@@ -19,6 +26,10 @@ function getApiBase(): string {
 
 function withLeadingSlash(path: string): string {
   return path.startsWith('/') ? path : `/${path}`;
+}
+
+export function getApiUrl(path: string): string {
+  return `${getApiBase()}${withLeadingSlash(path)}`;
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000; // 10 seconds
@@ -65,9 +76,7 @@ export async function apiFetch(
   path: string,
   init?: RequestInit & { retries?: number; timeoutMs?: number },
 ): Promise<Response> {
-  const normalizedPath = withLeadingSlash(path);
-  const apiBase = getApiBase();
-  const url = `${apiBase}${normalizedPath}`;
+  const url = getApiUrl(path);
   const { retries, timeoutMs: customTimeoutMs, signal, ...fetchInit } = init ?? {};
   const maxRetries = retries ?? MAX_RETRIES;
   const timeoutMs = customTimeoutMs ?? DEFAULT_TIMEOUT_MS;

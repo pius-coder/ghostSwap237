@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import electronPkg from 'electron';
+const { app, BrowserWindow, ipcMain, shell } = electronPkg;
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
 
-export const CURRENT_VERSION = '2.0.9';
+export const CURRENT_VERSION = '2.0.17';
 
 const DEFAULT_VERSION_ENDPOINT = 'https://format-boy-cam.vercel.app/api/version';
 const DEFAULT_DOWNLOAD_URL = 'https://mega.nz/file/yDZVDBQJ#jOM2bnxJuGUqBp3qri_8sCgFGJb3pbEiIv-4DI-WZA8';

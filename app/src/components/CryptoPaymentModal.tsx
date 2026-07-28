@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { getApiUrl } from '@/lib/api-client';
 
 interface CryptoPaymentModalProps {
   isOpen: boolean;
@@ -26,29 +27,36 @@ export function CryptoPaymentModal({ isOpen, onClose, plan }: CryptoPaymentModal
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [step, setStep] = useState<'initial' | 'processing' | 'success'>('initial');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
   const [isLoadingMethod, setIsLoadingMethod] = useState(false);
+  const paymentMethod =
+    paymentMethods.find((method) => method.id === selectedPaymentMethodId) || null;
 
   useEffect(() => {
     if (!isOpen) return;
 
     let cancelled = false;
     setIsLoadingMethod(true);
+    setPaymentMethods([]);
+    setSelectedPaymentMethodId(null);
+    setCopied(false);
     supabase
       .from('payment_methods')
       .select('id, name, crypto_currency, network, wallet_address, qr_code_url, instructions')
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
-      .limit(1)
-      .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
-          console.error('Failed to load payment method:', error);
+          console.error('Failed to load payment methods:', error);
           toast.error('Payment details are currently unavailable.');
-          setPaymentMethod(null);
+          setPaymentMethods([]);
+          setSelectedPaymentMethodId(null);
         } else {
-          setPaymentMethod(data as PaymentMethod | null);
+          const methods = (data || []) as PaymentMethod[];
+          setPaymentMethods(methods);
+          setSelectedPaymentMethodId(methods[0]?.id || null);
         }
         setIsLoadingMethod(false);
       });
@@ -72,14 +80,33 @@ export function CryptoPaymentModal({ isOpen, onClose, plan }: CryptoPaymentModal
 
     try {
       if (!plan.id) throw new Error('Invalid credit package');
+      if (!paymentMethod) throw new Error('Select a payment method');
 
-      // The database derives the amount and credits from the package and always
-      // creates a pending request, preventing client-side value manipulation.
-      const { error } = await supabase.rpc('create_pending_crypto_payment', {
-        p_package_id: plan.id,
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+
+      const response = await fetch(getApiUrl('/payment/crypto-submit'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          packageId: plan.id,
+          paymentMethodId: paymentMethod.id,
+          userId: user.id,
+        }),
       });
 
-      if (error) throw error;
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to submit payment request');
+      }
 
       setStep('success');
       toast.success('Payment request submitted. Admin will confirm shortly.');
@@ -113,7 +140,11 @@ export function CryptoPaymentModal({ isOpen, onClose, plan }: CryptoPaymentModal
 
         <h2 className="text-2xl font-bold text-white mb-2">Crypto Payment</h2>
         <p className="text-[#a1a1aa] text-sm mb-6">
-          {paymentMethod ? `Send ${paymentMethod.crypto_currency} on ${paymentMethod.network} to the address below.` : 'Loading payment details...'}
+          {paymentMethod
+            ? `Send ${paymentMethod.crypto_currency} on ${paymentMethod.network} to the address below.`
+            : isLoadingMethod
+              ? 'Loading payment details...'
+              : 'No active payment methods are available.'}
         </p>
 
         <div className="bg-[#1a1a1f] border border-[#27272a] rounded-xl p-4 mb-6">
@@ -137,6 +168,44 @@ export function CryptoPaymentModal({ isOpen, onClose, plan }: CryptoPaymentModal
           </div>
         ) : (
           <>
+            {paymentMethods.length > 0 && (
+              <div className="mb-4">
+                <div className="text-xs text-[#a1a1aa] font-medium uppercase tracking-wider mb-2">
+                  Choose payment method
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {paymentMethods.map((method) => {
+                    const isSelected = method.id === selectedPaymentMethodId;
+                    return (
+                      <button
+                        key={method.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPaymentMethodId(method.id);
+                          setCopied(false);
+                        }}
+                        className={`rounded-lg border p-3 text-left transition-colors ${
+                          isSelected
+                            ? 'border-emerald-500 bg-emerald-500/10'
+                            : 'border-[#3f3f46] bg-[#1a1a1f] hover:border-[#52525b]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-white">{method.name}</span>
+                          {isSelected && (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          )}
+                        </div>
+                        <div className="text-xs text-[#a1a1aa] mt-1">
+                          {method.crypto_currency} · {method.network}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {paymentMethod && (
               <div className="bg-white p-4 rounded-xl mb-4 flex items-center justify-center">
                 <img

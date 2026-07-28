@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Play, Square, Clock, Zap, Monitor, Plus, Coins, Minus, X, Settings, Eye, EyeOff, Camera } from 'lucide-react';
+import { Upload, Play, Square, Clock, Zap, Monitor, Plus, Coins, Minus, X, Settings, Eye, EyeOff, Camera, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useApp } from '@/context/AppContext';
-import { apiFetch } from '@/lib/api-client';
+import { apiFetch, getApiUrl } from '@/lib/api-client';
 import { ROUTES } from '@/lib/routes';
 import { VirtualCameraService } from '@/services/VirtualCameraService';
 import { isFiniteNumber } from '@/lib/utils';
@@ -13,18 +13,25 @@ interface RealtimeClient {
   disconnect: () => void;
   set: (config: { prompt?: string; enhance?: boolean; image?: string | Blob | File }) => Promise<void>;
   setPrompt: (text: string, options?: { enhance?: boolean }) => Promise<void>;
-  on?: (event: string, listener: (data: any) => void) => void;
-  off?: (event: string, listener: (data: any) => void) => void;
+  on?: (event: string, listener: (data: unknown) => void) => void;
+  off?: (event: string, listener: (data: unknown) => void) => void;
 }
 
 const PREVIEW_WINDOW_NAME = 'format-boy-preview';
 const PREVIEW_WINDOW_FEATURES = 'popup=yes,width=1280,height=720,minWidth=640,minHeight=360,resizable=yes,scrollbars=no';
-const DECART_REALTIME_MODEL = 'lucy_2_rt';
-const DECART_REALTIME_WIDTH = 1280;
-const DECART_REALTIME_HEIGHT = 720;
-const DECART_REALTIME_FPS = 20;
-const REMOTE_VIDEO_READY_TIMEOUT_MS = 3000;
-const REMOTE_VIDEO_VISIBLE_TIMEOUT_MS = 15000;
+const MORPHLY_SDK_URL = 'https://morphly.fun/sdk/morphly.js';
+const MORPHLY_REALTIME_MODEL = 'lucy-2.5';
+// Match Morphly's native lucy-2.5 capture profile. Sending at 20 fps made the
+// SDK resample every frame before it reached the model.
+const MORPHLY_REALTIME_WIDTH = 1280;
+const MORPHLY_REALTIME_HEIGHT = 720;
+const MORPHLY_REALTIME_FPS = 30;
+const MORPHLY_OUTPUT_RESOLUTION = '1080p';
+const MORPHLY_MAX_SESSION_SECONDS = 300;
+const REMOTE_VIDEO_READY_TIMEOUT_MS = 12_000;
+const REMOTE_VIDEO_VISIBLE_TIMEOUT_MS = 20_000;
+const MORPHLY_FIRST_FRAME_TIMEOUT_MS =
+  REMOTE_VIDEO_READY_TIMEOUT_MS + REMOTE_VIDEO_VISIBLE_TIMEOUT_MS + 5_000;
 
 function isVirtualCameraSource(device: MediaDeviceInfo) {
   const label = device.label.toLowerCase();
@@ -69,29 +76,8 @@ function emitElectronLog(level: 'log' | 'info' | 'warn' | 'error', message: stri
   }
 }
 
-function stripSimulcastFromOffer(offer: RTCSessionDescriptionInit) {
-  if (!offer.sdp) return { offer, removedLines: [] as string[] };
-
-  const lines = offer.sdp.split('\r\n');
-  const removedLines = lines.filter((line) =>
-    /^a=(rid|simulcast):/i.test(line) || /^a=ssrc-group:SIM /i.test(line)
-  );
-
-  if (removedLines.length === 0) {
-    return { offer, removedLines };
-  }
-
-  const filteredLines = lines.filter((line) =>
-    !/^a=(rid|simulcast):/i.test(line) && !/^a=ssrc-group:SIM /i.test(line)
-  );
-
-  return {
-    offer: {
-      ...offer,
-      sdp: filteredLines.join('\r\n')
-    },
-    removedLines
-  };
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : String(error || fallback);
 }
 
 function Dashboard() {
@@ -106,8 +92,10 @@ function Dashboard() {
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [cameraDiscoveryMessage, setCameraDiscoveryMessage] = useState('Finding cameras...');
-  // Default prompt since the new UI doesn't have an input field yet
-  const [prompt] = useState('A person looking professional');
+  const [prompt, setPrompt] = useState('A person looking professional');
+  const [promptDraft, setPromptDraft] = useState(prompt);
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+  const [isSendingPrompt, setIsSendingPrompt] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const webcamVideoRef = useRef<HTMLVideoElement>(null);
   const outputVideoRef = useRef<HTMLVideoElement>(null);
@@ -389,7 +377,7 @@ function Dashboard() {
       const probeContext = probeCanvas.getContext('2d', { willReadFrequently: true });
 
       if (!probeContext) {
-        throw new Error('Could not create Decart probe context');
+        throw new Error('Could not create Morphly probe context');
       }
 
       probeCanvas.width = 32;
@@ -433,7 +421,9 @@ function Dashboard() {
       await new Promise<void>((resolve, reject) => {
         const cleanup = () => {
           window.clearTimeout(timeoutId);
-          window.clearInterval(visibilityCheckId);
+          if (visibilityCheckId !== null) {
+            window.clearInterval(visibilityCheckId);
+          }
           probeVideo.removeEventListener('loadeddata', maybeReady);
           probeVideo.removeEventListener('playing', maybeReady);
           probeVideo.removeEventListener('resize', maybeReady);
@@ -447,7 +437,7 @@ function Dashboard() {
           ) {
             const visibleDeadline = window.setTimeout(() => {
               cleanup();
-              reject(new Error('Timed out waiting for non-black Decart video frames'));
+              reject(new Error('Timed out waiting for non-black Morphly video frames'));
             }, REMOTE_VIDEO_VISIBLE_TIMEOUT_MS);
 
             const finishVisibleCheck = () => {
@@ -474,7 +464,7 @@ function Dashboard() {
         let visibilityCheckId: number | null = null;
         const timeoutId = window.setTimeout(() => {
           cleanup();
-          reject(new Error('Timed out waiting for Decart video frames'));
+          reject(new Error('Timed out waiting for Morphly video frames'));
         }, REMOTE_VIDEO_READY_TIMEOUT_MS);
 
         probeVideo.addEventListener('loadeddata', maybeReady);
@@ -490,9 +480,9 @@ function Dashboard() {
     try {
         const buildVideoConstraints = (): MediaTrackConstraints => {
           const videoConstraints: MediaTrackConstraints = {
-            width: { ideal: DECART_REALTIME_WIDTH },
-            height: { ideal: DECART_REALTIME_HEIGHT },
-            frameRate: { ideal: DECART_REALTIME_FPS, max: DECART_REALTIME_FPS }
+            width: { ideal: MORPHLY_REALTIME_WIDTH },
+            height: { ideal: MORPHLY_REALTIME_HEIGHT },
+            frameRate: { ideal: MORPHLY_REALTIME_FPS, max: MORPHLY_REALTIME_FPS }
           };
 
           if (selectedCameraId) {
@@ -509,19 +499,22 @@ function Dashboard() {
           audio: false,
         });
 
+      const [videoTrack] = stream.getVideoTracks();
+      if (videoTrack) {
+        videoTrack.contentHint = 'motion';
+        emitElectronLog('info', '[Morphly] Camera input ready', videoTrack.getSettings());
+      }
+
       webcamStreamRef.current = stream;
       if (webcamVideoRef.current) {
         webcamVideoRef.current.srcObject = stream;
           void playPreviewVideo(webcamVideoRef.current, 'Hidden webcam preview');
       }
       if (outputVideoRef.current) {
-        outputVideoRef.current.srcObject = stream;
-        outputVideoRef.current.onloadedmetadata = () => {
-            void playPreviewVideo(outputVideoRef.current, 'Local preview');
-        };
-        if (outputVideoRef.current.readyState >= 1) {
-            void playPreviewVideo(outputVideoRef.current, 'Immediate local preview');
-        }
+        // Never expose the unprocessed camera through the visible output or
+        // virtual camera while Morphly is connecting.
+        outputVideoRef.current.pause();
+        outputVideoRef.current.srcObject = null;
       }
       return stream;
     } catch (error) {
@@ -541,192 +534,205 @@ function Dashboard() {
     }
   };
 
-  const connectToDecart = async (stream: MediaStream, apiToken: string): Promise<RealtimeClient | null> => {
+  const connectToMorphly = async (stream: MediaStream, userId: string): Promise<RealtimeClient> => {
+    let firstFrameTimeoutId: number | null = null;
+    let settleRemoteReady: (() => void) | null = null;
+    let settleRemoteError: ((error: Error) => void) | null = null;
+    let remoteReadySettled = false;
+
+    const remoteReadyPromise = new Promise<void>((resolve, reject) => {
+      const resolveOnce = () => {
+        if (remoteReadySettled) return;
+        remoteReadySettled = true;
+        if (firstFrameTimeoutId !== null) {
+          window.clearTimeout(firstFrameTimeoutId);
+        }
+        resolve();
+      };
+      const rejectOnce = (error: Error) => {
+        if (remoteReadySettled) return;
+        remoteReadySettled = true;
+        if (firstFrameTimeoutId !== null) {
+          window.clearTimeout(firstFrameTimeoutId);
+        }
+        reject(error);
+      };
+
+      settleRemoteReady = resolveOnce;
+      settleRemoteError = rejectOnce;
+      firstFrameTimeoutId = window.setTimeout(() => {
+        rejectOnce(new Error('Morphly connected but did not return a usable video frame.'));
+      }, MORPHLY_FIRST_FRAME_TIMEOUT_MS);
+    });
+    // The remote stream can fail before the SDK's connect promise settles.
+    // Attach a handler immediately while still allowing the later await to throw.
+    void remoteReadyPromise.catch(() => {});
+
     try {
-      const { createDecartClient, models } = await import('@decartai/sdk');
-      
-      const client = createDecartClient({
-        apiKey: apiToken
+      const { createMorphlyClient } = await import(/* @vite-ignore */ MORPHLY_SDK_URL);
+
+      const tokenEndpoint = `${getApiUrl('/morphly-token')}?userId=${encodeURIComponent(userId)}`;
+      const client = createMorphlyClient({
+        tokenEndpoint
       });
-      
-      const model = models.realtime(DECART_REALTIME_MODEL);
 
-      const realtimeClient = await client.realtime.connect(stream, {
-        model,
-        customizeOffer: async (offer: RTCSessionDescriptionInit) => {
-          const { offer: sanitizedOffer, removedLines } = stripSimulcastFromOffer(offer);
-          if (removedLines.length > 0) {
-            emitElectronLog('info', '[Decart] Stripped simulcast SDP lines from offer', removedLines);
-          }
-          return sanitizedOffer;
-        },
-        onRemoteStream: async (editedStream: MediaStream) => {
-          const video = outputVideoRef.current;
-          if (!video) return;
+      let initialImage: Blob | undefined;
+      if (uploadedImage) {
+        const imageResponse = await fetch(uploadedImage);
+        if (!imageResponse.ok) {
+          throw new Error('Could not prepare the selected reference image.');
+        }
+        initialImage = await imageResponse.blob();
+      }
 
-          // Only swap the video source if the edited stream actually has a
-          // live video track. Otherwise keep showing/streaming the raw
-          // local webcam so the virtual camera never goes black.
-          const liveTracks = editedStream
-            ?.getVideoTracks?.()
-            .filter((t) => t.readyState === 'live') ?? [];
-          if (liveTracks.length === 0) {
-            console.warn('[Decart] onRemoteStream had no live video tracks; keeping local stream');
-            emitElectronLog('warn', '[Decart] onRemoteStream had no live video tracks; keeping local stream');
-            return;
-          }
+      const session = await client.realtime.connect(stream, {
+        model: MORPHLY_REALTIME_MODEL,
+        prompt,
+        image: initialImage,
+        enhancePrompt: true,
+        resolution: MORPHLY_OUTPUT_RESOLUTION,
+        maxSessionSeconds: MORPHLY_MAX_SESSION_SECONDS,
+        onRemoteStream: (editedStream: MediaStream) => {
+          void (async () => {
+            const video = outputVideoRef.current;
+            if (!video) {
+              settleRemoteError?.(new Error('Morphly output video is unavailable.'));
+              return;
+            }
 
-          console.info(
-            '[Decart] Remote stream received',
-            liveTracks.map((track) => track.getSettings())
-          );
-          emitElectronLog(
-            'info',
-            '[Decart] Remote stream received',
-            liveTracks.map((track) => track.getSettings())
-          );
-
-          try {
-            await waitForRenderableStream(editedStream);
-          } catch (renderError) {
-            console.warn('[Decart] Remote stream was live but never produced visible frames; keeping local preview', renderError);
+            const initialVideoTracks = editedStream?.getVideoTracks?.() ?? [];
             emitElectronLog(
-              'warn',
-              '[Decart] Remote stream was live but never produced visible frames; keeping local preview',
-              String(renderError)
+              'info',
+              '[Morphly] Remote stream received',
+              initialVideoTracks.map((track) => ({
+                readyState: track.readyState,
+                muted: track.muted,
+                settings: track.getSettings()
+              }))
             );
-            return;
-          }
 
-          video.srcObject = editedStream;
-          video.playbackRate = 1.0;
-          (video as any).latencyHint = 'interactive';
+            try {
+              // Morphly may emit the MediaStream before WebRTC attaches its
+              // video track. The render probe waits for that track and the
+              // first non-black processed frame instead of rejecting early.
+              await waitForRenderableStream(editedStream);
+            } catch (renderError) {
+              console.warn(
+                '[Morphly] Remote stream did not produce visible frames',
+                renderError
+              );
+              emitElectronLog(
+                'warn',
+                '[Morphly] Remote stream did not produce visible frames',
+                String(renderError)
+              );
+              settleRemoteError?.(
+                renderError instanceof Error
+                  ? renderError
+                  : new Error('Morphly did not return visible video frames.')
+              );
+              return;
+            }
 
-          video.onloadedmetadata = () => {
-            void playPreviewVideo(video, 'Decart remote preview');
-          };
+            const liveTracks = editedStream
+              .getVideoTracks()
+              .filter((track) => track.readyState === 'live');
+            if (liveTracks.length === 0) {
+              settleRemoteError?.(
+                new Error('Morphly connected but its video track ended before the first frame.')
+              );
+              return;
+            }
 
-          if (video.readyState >= 2) {
-            void playPreviewVideo(video, 'Immediate Decart remote preview');
-          }
+            video.srcObject = editedStream;
+            video.playbackRate = 1;
+            (video as HTMLVideoElement & { latencyHint?: string }).latencyHint = 'interactive';
+            try {
+              await video.play();
+            } catch (playError) {
+              settleRemoteError?.(
+                playError instanceof Error
+                  ? playError
+                  : new Error('Could not play the Morphly output.')
+              );
+              return;
+            }
 
-          startVirtualCamera(video);
+            for (const track of liveTracks) {
+              track.addEventListener('unmute', () => {
+                void playPreviewVideo(video, 'Recovered Morphly remote preview');
+              });
+              track.addEventListener('ended', () => {
+                emitElectronLog('warn', '[Morphly] Remote video track ended');
+              });
+            }
+
+            emitElectronLog(
+              'info',
+              '[Morphly] Processed output ready',
+              {
+                width: video.videoWidth,
+                height: video.videoHeight,
+                requestedResolution: MORPHLY_OUTPUT_RESOLUTION
+              }
+            );
+            startVirtualCamera(video);
+            settleRemoteReady?.();
+          })();
         },
-        initialState: {
-          prompt: {
-            text: prompt,
-            enhance: true
+        onConnectionQuality: (quality: unknown) => {
+          emitElectronLog('info', '[Morphly] Connection quality', quality);
+        },
+        onStateChange: (state: unknown) => {
+          emitElectronLog('info', '[Morphly] Connection state', state);
+          if (state === 'connected' && outputVideoRef.current) {
+            void playPreviewVideo(outputVideoRef.current, 'Reconnected Morphly preview');
           }
+        },
+        onError: (sdkError: unknown) => {
+          emitElectronLog(
+            'error',
+            '[Morphly] Client error event',
+            getErrorMessage(sdkError, 'Unknown Morphly client error')
+          );
         }
       });
 
-      let lastStatsLogAt = 0;
-
-      realtimeClient.on?.('connectionChange', (state) => {
-        emitElectronLog('info', '[Decart] Connection state', state);
-      });
-
-      realtimeClient.on?.('error', (sdkError) => {
-        emitElectronLog('error', '[Decart] Client error event', sdkError?.message || sdkError);
-      });
-
-      realtimeClient.on?.('diagnostic', (event) => {
-        if (!event?.name) return;
-
-        if (
-          event.name === 'videoStall' ||
-          event.name === 'phaseTiming' ||
-          event.name === 'reconnect' ||
-          event.name === 'peerConnectionStateChange' ||
-          event.name === 'iceStateChange' ||
-          event.name === 'signalingStateChange' ||
-          event.name === 'selectedCandidatePair'
-        ) {
-          emitElectronLog('info', `[Decart] Diagnostic ${event.name}`, event.data);
-        }
-      });
-
-      realtimeClient.on?.('stats', (stats) => {
-        const now = Date.now();
-        const shouldLogLowFps = Boolean(stats?.video && stats.video.framesPerSecond < 1);
-        const shouldLogQualityLimit = Boolean(
-          stats?.outboundVideo &&
-          stats.outboundVideo.qualityLimitationReason &&
-          stats.outboundVideo.qualityLimitationReason !== 'none'
-        );
-
-        if (!shouldLogLowFps && !shouldLogQualityLimit && now - lastStatsLogAt < 5000) {
-          return;
-        }
-
-        lastStatsLogAt = now;
-        emitElectronLog('info', '[Decart] Stats', {
-          inboundVideoFps: stats?.video?.framesPerSecond ?? null,
-          inboundVideoSize: stats?.video
-            ? `${stats.video.frameWidth}x${stats.video.frameHeight}`
-            : null,
-          inboundFreezeCount: stats?.video?.freezeCount ?? null,
-          outboundVideoFps: stats?.outboundVideo?.framesPerSecond ?? null,
-          outboundVideoSize: stats?.outboundVideo
-            ? `${stats.outboundVideo.frameWidth}x${stats.outboundVideo.frameHeight}`
-            : null,
-          qualityLimitationReason: stats?.outboundVideo?.qualityLimitationReason ?? null,
-          availableOutgoingBitrate: stats?.connection?.availableOutgoingBitrate ?? null,
-          currentRoundTripTime: stats?.connection?.currentRoundTripTime ?? null,
-        });
-      });
-
-      realtimeClientRef.current = realtimeClient as any;
+      realtimeClientRef.current = session;
+      await remoteReadyPromise;
       toast.success('Connected to AI!');
 
-      try {
-        if (uploadedImage) {
-          const imgResponse = await fetch(uploadedImage);
-          const imgBlob = await imgResponse.blob();
-          await (realtimeClient as any).set({
-            prompt: prompt,
-            enhance: true,
-            image: imgBlob
-          });
-        } else {
-          await (realtimeClient as any).setPrompt(prompt, { enhance: true });
-        }
-      } catch (setError) {
-        console.error('[Decart] Failed to apply initial transformation:', setError);
-        emitElectronLog('warn', '[Decart] Failed to apply initial transformation', String(setError));
+      return session;
+    } catch (error: unknown) {
+      if (firstFrameTimeoutId !== null) {
+        window.clearTimeout(firstFrameTimeoutId);
+      }
+      console.error('[Morphly] SDK error:', error);
+      emitElectronLog(
+        'error',
+        '[Morphly] SDK error',
+        getErrorMessage(error, 'Unknown Morphly SDK error')
+      );
+
+      const morphlyError = error as {
+        code?: string;
+        status?: number;
+        cause?: { code?: string };
+      };
+      const errorCode = morphlyError?.code || morphlyError?.cause?.code;
+      if (errorCode === 'REALTIME_TEMPORARILY_DISABLED' || morphlyError?.status === 503) {
+        throw new Error(
+          'Morphly realtime sessions are temporarily paused for maintenance. Please try again later.'
+        );
       }
 
-      return realtimeClient as any;
-    } catch (error: any) {
-      console.error('[Decart] SDK error:', error);
-      emitElectronLog('error', '[Decart] SDK error', error?.message || String(error));
-      const errorMessage =
-        error?.message ||
-        error?.cause?.message ||
-        error?.data?.message ||
-        'Failed to connect to AI';
-      toast.error(errorMessage);
-      
-      if (outputVideoRef.current) {
-        outputVideoRef.current.srcObject = stream;
-        outputVideoRef.current.play().catch(() => {});
-        startVirtualCamera(outputVideoRef.current);
-      }
-      
-      const mockClient: RealtimeClient = {
-        disconnect: () => {},
-        set: async () => {},
-        setPrompt: async () => {},
-        on: () => {},
-        off: () => {}
-      };
-      
-      realtimeClientRef.current = mockClient;
-      return mockClient;
+      throw error instanceof Error
+        ? error
+        : new Error('Failed to connect to Morphly.');
     }
   };
 
-  const disconnectFromDecart = () => {
+  const disconnectFromMorphly = () => {
     stopVirtualCamera();
     if (realtimeClientRef.current) {
       realtimeClientRef.current.disconnect();
@@ -778,14 +784,9 @@ function Dashboard() {
         return;
       }
 
-      if (outputVideoRef.current) {
-        startVirtualCamera(outputVideoRef.current);
-      }
-
       const sessionResponse = await apiRequest<{
         allowed: boolean;
         error?: string;
-        token?: string;
         credits?: number;
       }>('/start-session', {
         method: 'POST',
@@ -802,11 +803,7 @@ function Dashboard() {
         setCredits(sessionResponse.credits);
       }
 
-      if (!sessionResponse.token) {
-        throw new Error('Decart token missing from start-session response.');
-      }
-
-      await connectToDecart(stream, sessionResponse.token);
+      await connectToMorphly(stream, user.id);
 
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -839,7 +836,7 @@ function Dashboard() {
 
       toast.error(error instanceof Error ? error.message : 'Failed to start session');
       stopWebcam();
-      disconnectFromDecart();
+      disconnectFromMorphly();
       setIsStreaming(false);
       setSessionStatus('IDLE');
     } finally {
@@ -870,7 +867,7 @@ function Dashboard() {
       pollIntervalRef.current = null;
     }
 
-    disconnectFromDecart();
+    disconnectFromMorphly();
     stopWebcam();
     
     setIsStreaming(false);
@@ -918,6 +915,57 @@ function Dashboard() {
         }
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const openPromptModal = () => {
+    setPromptDraft(prompt);
+    setIsPromptModalOpen(true);
+  };
+
+  const handlePromptSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextPrompt = promptDraft.trim();
+
+    if (!nextPrompt) {
+      toast.error('Enter a prompt before sending.');
+      return;
+    }
+    if (!isStreaming || !realtimeClientRef.current) {
+      toast.error('Start a camera session before sending a prompt.');
+      return;
+    }
+
+    setIsSendingPrompt(true);
+    try {
+      if (uploadedImage) {
+        const imageResponse = await fetch(uploadedImage);
+        if (!imageResponse.ok) {
+          throw new Error('Could not prepare the uploaded reference image.');
+        }
+
+        const imageBlob = await imageResponse.blob();
+        await realtimeClientRef.current.set({
+          prompt: nextPrompt,
+          enhance: true,
+          image: imageBlob,
+        });
+      } else {
+        await realtimeClientRef.current.setPrompt(nextPrompt, { enhance: true });
+      }
+
+      setPrompt(nextPrompt);
+      setIsPromptModalOpen(false);
+      toast.success(
+        uploadedImage
+          ? 'Prompt and reference image sent to Lucy 2.5.'
+          : 'Prompt sent to Lucy 2.5.'
+      );
+    } catch (error) {
+      console.error('Failed to send Morphly prompt:', error);
+      toast.error('Could not send the prompt to Morphly.');
+    } finally {
+      setIsSendingPrompt(false);
     }
   };
 
@@ -1079,6 +1127,16 @@ function Dashboard() {
              >
                {isGhostMode ? <EyeOff className="w-3.5 h-3.5 opacity-80" /> : <Eye className="w-3.5 h-3.5 opacity-80" />}
                <span className="hidden font-medium text-[13px] min-[1200px]:inline">{isGhostMode ? 'Ghost Mode On' : 'Ghost Mode'}</span>
+              </button>
+
+             <button
+               onClick={openPromptModal}
+               disabled={!isStreaming}
+               title={isStreaming ? 'Write and send a Morphly prompt' : 'Start a session to send a prompt'}
+               className="ml-1 h-[34px] min-w-[122px] shrink-0 px-4 flex items-center justify-center gap-2 rounded-sm border bg-[#1E1E1E] border-[#2A2A2A] text-[#A3A3A3] hover:border-[#3A3A3A] hover:text-white transition-all disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[#2A2A2A] disabled:hover:text-[#A3A3A3]"
+             >
+               <MessageSquare className="w-3.5 h-3.5 opacity-80" />
+               <span className="font-medium text-[13px]">Send Prompt</span>
              </button>
 
              <button 
@@ -1137,9 +1195,77 @@ function Dashboard() {
                   <span className="text-xs font-bold text-[#E5E5E5]">{formatTime(getRemainingSeconds())}</span>
                </div>
             </div>
+          </div>
+       </footer>
+
+       {isPromptModalOpen && (
+         <div
+           className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm app-region-no-drag"
+           onMouseDown={(event) => {
+             if (event.target === event.currentTarget && !isSendingPrompt) {
+               setIsPromptModalOpen(false);
+             }
+           }}
+         >
+           <form
+             onSubmit={handlePromptSubmit}
+             className="relative w-full max-w-lg rounded-xl border border-[#2A2A2A] bg-[#151515] p-5 shadow-2xl"
+           >
+             <button
+               type="button"
+               aria-label="Close prompt form"
+               disabled={isSendingPrompt}
+               onClick={() => setIsPromptModalOpen(false)}
+               className="absolute right-4 top-4 text-[#737373] hover:text-white disabled:opacity-50"
+             >
+               <X className="h-5 w-5" />
+             </button>
+
+             <div className="pr-8">
+               <h2 className="text-lg font-semibold text-white">Send a prompt</h2>
+               <p className="mt-1 text-sm text-[#8A8A8A]">
+                 {uploadedImage
+                   ? 'This prompt will be combined with your uploaded reference image.'
+                   : 'Describe how Lucy 2.5 should transform your camera output.'}
+               </p>
+             </div>
+
+             <textarea
+               autoFocus
+               value={promptDraft}
+               onChange={(event) => setPromptDraft(event.target.value)}
+               maxLength={1000}
+               rows={5}
+               placeholder="Example: Cinematic studio portrait with soft lighting"
+               className="mt-4 w-full resize-none rounded-lg border border-[#303030] bg-[#0F0F0F] p-3 text-sm text-white outline-none placeholder:text-[#555555] focus:border-[#4A4A4A]"
+             />
+
+             <div className="mt-2 flex items-center justify-between">
+               <span className="text-xs text-[#666666]">{promptDraft.length}/1000</span>
+               <span className="text-xs text-[#666666]">Sends immediately to the live session</span>
+             </div>
+
+             <div className="mt-5 flex justify-end gap-2">
+               <button
+                 type="button"
+                 disabled={isSendingPrompt}
+                 onClick={() => setIsPromptModalOpen(false)}
+                 className="h-10 rounded-md border border-[#303030] px-4 text-sm font-medium text-[#A3A3A3] hover:text-white disabled:opacity-50"
+               >
+                 Cancel
+               </button>
+               <button
+                 type="submit"
+                 disabled={isSendingPrompt || !promptDraft.trim()}
+                 className="h-10 min-w-[120px] rounded-md bg-[#22C55E] px-5 text-sm font-semibold text-[#07120A] hover:bg-[#34D66F] disabled:cursor-not-allowed disabled:opacity-50"
+               >
+                 {isSendingPrompt ? 'Sending...' : 'Send Prompt'}
+               </button>
+             </div>
+           </form>
          </div>
-      </footer>
-    </div>
+       )}
+     </div>
   );
 }
 

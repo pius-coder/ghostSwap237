@@ -123,7 +123,7 @@ export default async function handler(req, res) {
 
     if (sessionError) return res.status(500).json({ allowed: false, error: 'Failed to create session' });
 
-    res.json({ allowed: true, sessionId: newSession.id, token: process.env.DECART_API_KEY, credits: currentCredits });
+    res.json({ allowed: true, sessionId: newSession.id, credits: currentCredits });
   } catch (error) {
     console.error('Start session error:', error);
     res.status(500).json({ allowed: false, error: 'Internal server error' });

@@ -20,9 +20,11 @@ exports.default = async function afterPack(context) {
   const { appOutDir } = context;
 
   // Source: native-camera/build/Release (cmake output)
-  // Adjust this path if you change the cmake build directory.
   const repoRoot = path.resolve(__dirname, '..', '..');
-  const srcDir   = path.join(repoRoot, 'native-camera', 'build', 'Release');
+  const configuredBinDir = String(process.env.FORMAT_BOY_NATIVE_BIN_DIR || '').trim();
+  const srcDir = configuredBinDir
+    ? path.resolve(repoRoot, configuredBinDir)
+    : path.join(repoRoot, 'native-camera', 'build', 'Release');
 
   // Destination: <packaged-app>/resources/formatboy-cam/
   const dstDir = path.join(appOutDir, 'resources', 'formatboy-cam');
