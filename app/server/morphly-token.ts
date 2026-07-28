@@ -23,6 +23,21 @@ function getRequestedDuration(value) {
   return Math.min(Math.round(parsed), MAX_MORPHLY_SESSION_SECONDS);
 }
 
+export function normalizeRequestedOrigin(value) {
+  if (typeof value !== 'string') return '';
+
+  const requestedOrigin = value.trim();
+  if (!requestedOrigin || requestedOrigin === 'null') return '';
+
+  try {
+    const parsed = new URL(requestedOrigin);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    return parsed.origin;
+  } catch {
+    return '';
+  }
+}
+
 export default async function handler(req, res, options = {}) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -92,9 +107,11 @@ export default async function handler(req, res, options = {}) {
       });
     }
 
-    const requestedOrigin = typeof req.body?.origin === 'string'
-      ? req.body.origin.trim()
-      : '';
+    // Electron pages use file://, whose browser origin is the literal string
+    // "null". Morphly only needs a web origin for browser-origin enforcement,
+    // so omit non-HTTP origins instead of forwarding an unusable provider
+    // constraint into realtime session creation.
+    const requestedOrigin = normalizeRequestedOrigin(req.body?.origin);
     const upstreamBody = {
       model: MORPHLY_REALTIME_MODEL,
       max_session_seconds: getRequestedDuration(req.body?.maxSessionSeconds),
