@@ -6,6 +6,7 @@ import morphlyTokenHandler from '../server/morphly-token.js';
 const CREDITS_PER_SECOND = 2;
 const MAX_SESSION_DURATION = 600;
 const HEARTBEAT_GRACE_SECONDS = 3;
+const MORPHLY_API_KEY = process.env.MORPHLY_API_KEY;
 
 async function closeActiveSession(userId, activeSession) {
   try {
@@ -82,7 +83,7 @@ async function closeActiveSession(userId, activeSession) {
 
 export default async function handler(req, res) {
   if (req.query?.action === 'morphly-token') {
-    return morphlyTokenHandler(req, res);
+    return morphlyTokenHandler(req, res, { morphlyApiKey: MORPHLY_API_KEY });
   }
 
   res.setHeader("Access-Control-Allow-Origin", "*");

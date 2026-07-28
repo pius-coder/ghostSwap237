@@ -23,7 +23,7 @@ function getRequestedDuration(value) {
   return Math.min(Math.round(parsed), MAX_MORPHLY_SESSION_SECONDS);
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, options = {}) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const morphlyApiKey = process.env.MORPHLY_API_KEY;
+  const morphlyApiKey = options.morphlyApiKey || process.env.MORPHLY_API_KEY;
   if (!morphlyApiKey) {
     return res.status(500).json({
       error: 'Morphly is not configured on the server.',
