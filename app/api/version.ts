@@ -45,7 +45,8 @@ async function fetchGitHubRelease(owner, repo, exePattern) {
 
     const version = release.tag_name.replace(/^v/, '');
     const downloadUrl = exeAsset.browser_download_url;
-    const sha256 = release.body.match(/SHA256[:\s]+`?([a-f0-9]{64})`?/i)?.[1] || '';
+    const sha256 =
+      release.body.match(/(?:\*\*)?SHA256\s*:\s*(?:\*\*)?\s*`?([a-f0-9]{64})`?/i)?.[1] || '';
     const notes = release.body || release.name || '';
 
     return {
