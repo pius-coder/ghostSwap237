@@ -2,7 +2,7 @@
 import path from 'path';
 import { supabaseAdmin, supabaseAdminConfigError } from './supabase.js';
 
-const FALLBACK_VERSION = '2.0.19';
+const FALLBACK_VERSION = '2.0.20';
 const FALLBACK_DOWNLOAD_URL = '';
 const FALLBACK_ARTIFACT_TYPE = 'installer';
 const DEFAULT_SIGNED_URL_EXPIRES = 60 * 60 * 2;

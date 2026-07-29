@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { Users, CreditCard, Package, Check, X, Activity, Edit2, Plus } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { ROUTES } from '@/lib/routes';
+import { getApiUrl } from '@/lib/api-client';
 
 function withTimeout<T>(operation: PromiseLike<T>, label: string, timeoutMs = 12_000): Promise<T> {
   return Promise.race([
@@ -54,12 +55,55 @@ export default function AdminDashboard() {
   const [isPaymentMethodOpen, setIsPaymentMethodOpen] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<any>(null);
   const [methodName, setMethodName] = useState('');
-  const [methodCurrency, setMethodCurrency] = useState('USDT');
-  const [methodNetwork, setMethodNetwork] = useState('ERC20');
+  const [methodCurrency, setMethodCurrency] = useState('');
+  const [methodNetwork, setMethodNetwork] = useState('');
   const [methodAddress, setMethodAddress] = useState('');
   const [methodInstructions, setMethodInstructions] = useState('');
   const [methodQrFile, setMethodQrFile] = useState<File | null>(null);
   const [methodActive, setMethodActive] = useState(true);
+  const [isSavingPaymentMethod, setIsSavingPaymentMethod] = useState(false);
+
+  const getAdminAccessToken = async () => {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    if (error || !session?.access_token) {
+      throw new Error('Your session has expired. Please sign in again.');
+    }
+    return session.access_token;
+  };
+
+  const loadAdminPaymentMethods = async () => {
+    const accessToken = await getAdminAccessToken();
+    const response = await fetch(getApiUrl('/payment-methods?includeInactive=true'), {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      cache: 'no-store',
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not load payment methods.');
+    return { data: result.paymentMethods || [], error: null };
+  };
+
+  const savePaymentMethod = async (values: Record<string, unknown>, id?: string) => {
+    const accessToken = await getAdminAccessToken();
+    const response = await fetch(getApiUrl('/payment-methods'), {
+      method: id ? 'PATCH' : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(id ? { ...values, id } : values),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not save the payment method.');
+    if (!result.paymentMethod?.id) throw new Error('The server did not confirm the saved payment method.');
+    return result.paymentMethod;
+  };
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
@@ -76,7 +120,7 @@ export default function AdminDashboard() {
         withTimeout(supabase.from('transactions').select('*').order('created_at', { ascending: false }), 'Website transactions'),
         withTimeout(supabase.from('users').select('*').order('created_at', { ascending: false }), 'Users'),
         withTimeout(supabase.from('credit_packages').select('*').order('sort_order', { ascending: true }).order('credits', { ascending: true }), 'Credit packages'),
-        withTimeout(supabase.from('payment_methods').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }), 'Payment methods'),
+        withTimeout(loadAdminPaymentMethods(), 'Payment methods'),
       ]);
 
       optionalResults.forEach(result => {
@@ -230,9 +274,9 @@ export default function AdminDashboard() {
 
   const openPaymentMethodDialog = (method?: any) => {
     setSelectedPaymentMethod(method || null);
-    setMethodName(method?.name || 'USDT Payment');
-    setMethodCurrency(method?.crypto_currency || 'USDT');
-    setMethodNetwork(method?.network || 'ERC20');
+    setMethodName(method?.name || '');
+    setMethodCurrency(method?.crypto_currency || '');
+    setMethodNetwork(method?.network || '');
     setMethodAddress(method?.wallet_address || '');
     setMethodInstructions(method?.instructions || '');
     setMethodQrFile(null);
@@ -247,41 +291,51 @@ export default function AdminDashboard() {
       return;
     }
 
+    setIsSavingPaymentMethod(true);
     try {
-      let qrCodeUrl = selectedPaymentMethod?.qr_code_url || null;
-
-      if (methodQrFile) {
-        const extension = methodQrFile.name.split('.').pop()?.toLowerCase() || 'png';
-        const safeNetwork = methodNetwork.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        const objectPath = `${methodCurrency.toLowerCase()}-${safeNetwork}-${Date.now()}.${extension}`;
-        const { error: uploadError } = await supabase.storage
-          .from('payment-qr-codes')
-          .upload(objectPath, methodQrFile, { contentType: methodQrFile.type, upsert: false });
-        if (uploadError) throw uploadError;
-
-        qrCodeUrl = supabase.storage.from('payment-qr-codes').getPublicUrl(objectPath).data.publicUrl;
-      }
-
       const values = {
         name: methodName.trim(),
         crypto_currency: methodCurrency.trim().toUpperCase(),
         network: methodNetwork.trim(),
         wallet_address: methodAddress.trim(),
         instructions: methodInstructions.trim() || null,
-        qr_code_url: qrCodeUrl,
+        qr_code_url: selectedPaymentMethod?.qr_code_url || null,
         is_active: methodActive,
       };
 
-      const { error } = selectedPaymentMethod
-        ? await supabase.from('payment_methods').update(values).eq('id', selectedPaymentMethod.id)
-        : await supabase.from('payment_methods').insert(values);
-      if (error) throw error;
+      let savedMethod = await savePaymentMethod(values, selectedPaymentMethod?.id);
+      let qrUploadWarning = '';
 
-      toast.success(selectedPaymentMethod ? 'Payment method updated' : 'Payment method added');
+      if (methodQrFile) {
+        try {
+          const extension = methodQrFile.name.split('.').pop()?.toLowerCase() || 'png';
+          const objectPath = `payment-methods/${savedMethod.id}-${Date.now()}.${extension}`;
+          const { error: uploadError } = await supabase.storage
+            .from('payment-qr-codes')
+            .upload(objectPath, methodQrFile, { contentType: methodQrFile.type, upsert: false });
+          if (uploadError) throw uploadError;
+
+          const qrCodeUrl = supabase.storage.from('payment-qr-codes').getPublicUrl(objectPath).data.publicUrl;
+          savedMethod = await savePaymentMethod(
+            { ...values, qr_code_url: qrCodeUrl },
+            savedMethod.id,
+          );
+        } catch (error) {
+          console.error('Payment QR upload failed after the wallet was saved:', error);
+          qrUploadWarning = ' The wallet was stored, but its QR image could not be linked; you can retry it from Edit.';
+        }
+      }
+
+      toast.success(
+        `${selectedPaymentMethod ? 'Payment method updated' : 'Payment method added'} and stored.${qrUploadWarning}`,
+      );
       setIsPaymentMethodOpen(false);
-      fetchDashboardData();
+      setSelectedPaymentMethod(null);
+      await fetchDashboardData();
     } catch (err: any) {
       toast.error(err.message || 'Failed to save payment method');
+    } finally {
+      setIsSavingPaymentMethod(false);
     }
   };
 
@@ -707,8 +761,10 @@ export default function AdminDashboard() {
               </label>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsPaymentMethodOpen(false)} className="border-[#3f3f46] bg-transparent text-white">Cancel</Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">Save Payment Method</Button>
+              <Button type="button" variant="outline" onClick={() => setIsPaymentMethodOpen(false)} disabled={isSavingPaymentMethod} className="border-[#3f3f46] bg-transparent text-white">Cancel</Button>
+              <Button type="submit" disabled={isSavingPaymentMethod} className="bg-blue-600 hover:bg-blue-700 text-white">
+                {isSavingPaymentMethod ? 'Saving...' : 'Save Payment Method'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
