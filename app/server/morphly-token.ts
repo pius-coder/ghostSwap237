@@ -3,7 +3,7 @@ import { supabaseAdmin, supabaseAdminConfigError } from '../api/supabase.js';
 import { getWalletByUserId } from '../api/credit-utils.js';
 
 const MORPHLY_SESSION_URL = 'https://api.morphly.fun/v1/realtime/sessions';
-const MORPHLY_REALTIME_MODEL = 'lucy-2.5';
+const MORPHLY_REALTIME_MODEL = 'lucy-2.1';
 const MAX_MORPHLY_SESSION_SECONDS = 300;
 
 function getRequestedUserId(req) {
