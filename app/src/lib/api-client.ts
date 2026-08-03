@@ -17,11 +17,16 @@ function getApiBase(): string {
 
   const configuredBase = normalizeApiBase(import.meta.env.VITE_API_BASE_URL);
   if (configuredBase) {
+    // If it's configured to localhost but we are in production, override it to Vercel.
+    // This prevents the desktop app from being broken if VITE_API_BASE_URL was left as localhost.
+    if (!import.meta.env.DEV && configuredBase.includes('localhost')) {
+      return 'https://format-boy-cam.vercel.app/api';
+    }
     return `${configuredBase}/api`;
   }
 
-  // Fall back to a relative path only when no explicit API base is configured.
-  return '/api';
+  // Fall back to the Vercel app in production if no explicit API base is configured.
+  return import.meta.env.DEV ? '/api' : 'https://format-boy-cam.vercel.app/api';
 }
 
 function withLeadingSlash(path: string): string {
