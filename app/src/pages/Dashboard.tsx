@@ -20,8 +20,8 @@ interface RealtimeClient {
 const PREVIEW_WINDOW_NAME = 'format-boy-preview';
 const PREVIEW_WINDOW_FEATURES = 'popup=yes,width=1280,height=720,minWidth=640,minHeight=360,resizable=yes,scrollbars=no';
 const MORPHLY_SDK_URL = 'https://morphly.fun/sdk/morphly.js';
-const MORPHLY_REALTIME_MODEL = 'lucy-2.1';
-// Match Morphly's native lucy-2.1 capture profile. Sending at 20 fps made the
+const MORPHLY_REALTIME_MODEL = 'lucy-2.5';
+// Match Morphly's native lucy-2.5 capture profile. Sending at 20 fps made the
 // SDK resample every frame before it reached the model.
 const MORPHLY_REALTIME_WIDTH = 1280;
 const MORPHLY_REALTIME_HEIGHT = 720;
@@ -958,8 +958,8 @@ function Dashboard() {
       setIsPromptModalOpen(false);
       toast.success(
         uploadedImage
-          ? 'Prompt and reference image sent to Lucy 2.1.'
-          : 'Prompt sent to Lucy 2.1.'
+          ? 'Prompt and reference image sent to Lucy 2.5.'
+          : 'Prompt sent to Lucy 2.5.'
       );
     } catch (error) {
       console.error('Failed to send Morphly prompt:', error);
@@ -1226,7 +1226,7 @@ function Dashboard() {
                <p className="mt-1 text-sm text-[#8A8A8A]">
                  {uploadedImage
                    ? 'This prompt will be combined with your uploaded reference image.'
-                   : 'Describe how Lucy 2.1 should transform your camera output.'}
+                   : 'Describe how Lucy 2.5 should transform your camera output.'}
                </p>
              </div>
 
@@ -1236,7 +1236,7 @@ function Dashboard() {
                onChange={(event) => setPromptDraft(event.target.value)}
                maxLength={1000}
                rows={5}
-               placeholder={isSendingPrompt ? "Sending to AI..." : 'Describe how Lucy 2.1 should transform your camera output.'}
+               placeholder={isSendingPrompt ? "Sending to AI..." : 'Describe how Lucy 2.5 should transform your camera output.'}
                className="mt-4 w-full resize-none rounded-lg border border-[#303030] bg-[#0F0F0F] p-3 text-sm text-white outline-none placeholder:text-[#555555] focus:border-[#4A4A4A]"
              />
 
