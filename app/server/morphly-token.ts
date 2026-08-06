@@ -85,7 +85,7 @@ export default async function handler(req, res, options = {}) {
 
     const { data: activeSession, error: activeSessionError } = await supabaseAdmin
       .from('sessions')
-      .select('id')
+      .select('id, metadata')
       .eq('user_id', userId)
       .eq('status', 'active')
       .order('start_time', { ascending: false })
@@ -137,6 +137,33 @@ export default async function handler(req, res, options = {}) {
       console.error('Morphly session creation failed:', {
         status: upstream.status,
         code: result?.code || null,
+      });
+      return res.status(upstream.status).json(result);
+    }
+
+    // A session created by /start-session is only billable once a realtime
+    // credential exists. This route is the final server-side step before the
+    // desktop client can connect, so recording it here prevents a rejected
+    // provider request from being charged when the client cleans up.
+    const metadata = activeSession.metadata && typeof activeSession.metadata === 'object'
+      ? activeSession.metadata
+      : {};
+    const { error: activationError } = await supabaseAdmin
+      .from('sessions')
+      .update({
+        metadata: {
+          ...metadata,
+          realtime_credential_issued_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', activeSession.id)
+      .eq('status', 'active');
+
+    if (activationError) {
+      console.error('Could not activate billable realtime session:', activationError);
+      return res.status(500).json({
+        error: 'Could not prepare the realtime session.',
+        code: 'SESSION_ACTIVATION_FAILED',
       });
     }
 
