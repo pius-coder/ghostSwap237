@@ -31,20 +31,26 @@ async function closeActiveSession(userId, activeSession) {
       ? activeSession.metadata
       : {};
     const realtimeCredentialIssued = hasRealtimeCredential(metadata);
+    const credentialIssuedMs = realtimeCredentialIssued
+      ? Date.parse(metadata.realtime_credential_issued_at)
+      : NaN;
+    const billableStartMs = Number.isFinite(credentialIssuedMs)
+      ? Math.max(startTime, credentialIssuedMs)
+      : startTime;
 
     const lastHeartbeatRaw = metadata?.last_heartbeat;
     const lastHeartbeatMs = typeof lastHeartbeatRaw === 'string' ? new Date(lastHeartbeatRaw).getTime() : NaN;
 
     const nowMs = Date.now();
-    const maxEndMs = startTime + MAX_SESSION_DURATION * 1000;
+    const maxEndMs = billableStartMs + MAX_SESSION_DURATION * 1000;
 
     const billingEndMs = !realtimeCredentialIssued
-      ? startTime
+      ? billableStartMs
       : Number.isFinite(lastHeartbeatMs)
         ? Math.min(nowMs, lastHeartbeatMs + HEARTBEAT_GRACE_SECONDS * 1000, maxEndMs)
         : Math.min(nowMs, maxEndMs);
 
-    const billableMs = Math.max(0, billingEndMs - startTime);
+    const billableMs = Math.max(0, billingEndMs - billableStartMs);
     const elapsedSeconds = Math.floor(billableMs / 1000);
     const creditsPerSecond = Number.isFinite(activeSession?.credits_per_second)
       ? activeSession.credits_per_second
