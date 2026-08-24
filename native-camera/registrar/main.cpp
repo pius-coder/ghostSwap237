@@ -1,8 +1,8 @@
-// formatboy_cam_registrar.exe
+// henshin_cam_registrar.exe
 // Usage:
-//   formatboy_cam_registrar install [--all-users]
-//   formatboy_cam_registrar remove  [--all-users] [--unregister-com]
-//   formatboy_cam_registrar probe
+//   henshin_cam_registrar install [--all-users]
+//   henshin_cam_registrar remove  [--all-users] [--unregister-com]
+//   henshin_cam_registrar probe
 //
 // Must run elevated (Administrator) for --all-users operations.
 // The NSIS installer runs this elevated automatically.
@@ -29,7 +29,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include "../formatboy_ids.h"
+#include "../henshin_ids.h"
 
 #pragma comment(lib, "mf.lib")
 #pragma comment(lib, "mfuuid.lib")
@@ -45,6 +45,9 @@ using Microsoft::WRL::ComPtr;
 
 static const wchar_t* const kLegacyCameraFriendlyNames[] = {
     L"Morphly G1",
+    L"GhostSwap37 Camera",
+    L"Format-Boy CAM",
+    L"CALL ME",
 };
 
 // ---------------------------------------------------------------------------
@@ -255,7 +258,9 @@ static bool IsClsidRegistered(REFCLSID clsid) {
 
 static bool IsLegacyCameraFriendlyName(const std::wstring& friendlyName) {
     for (const auto* legacyFriendlyName : kLegacyCameraFriendlyNames) {
-        if (friendlyName == legacyFriendlyName) {
+        const std::wstring legacyName(legacyFriendlyName);
+        if (friendlyName == legacyName ||
+            friendlyName.rfind(legacyName + L" (", 0) == 0) {
             return true;
         }
     }
@@ -505,7 +510,7 @@ static void RemoveLegacyDirectShowRegistrations() {
 // ---------------------------------------------------------------------------
 static bool RegisterMFClsid(const wchar_t* dllDeployPath) {
     wchar_t clsidStr[64] = {};
-    StringFromGUID2(CLSID_FormatBoyVirtualCameraMF, clsidStr, 64);
+    StringFromGUID2(CLSID_HenshinVirtualCameraMF, clsidStr, 64);
 
     wchar_t key[256];
     _snwprintf_s(key, _countof(key), _TRUNCATE,
@@ -536,7 +541,7 @@ static bool RegisterMFClsid(const wchar_t* dllDeployPath) {
 // ---------------------------------------------------------------------------
 static bool RegisterDSClsid(const wchar_t* dllDeployPath) {
     wchar_t clsidStr[64] = {};
-    StringFromGUID2(CLSID_FormatBoyVirtualCameraDS, clsidStr, 64);
+    StringFromGUID2(CLSID_HenshinVirtualCameraDS, clsidStr, 64);
 
     wchar_t key[256];
     _snwprintf_s(key, _countof(key), _TRUNCATE,
@@ -583,7 +588,7 @@ static bool RegisterDSClsid(const wchar_t* dllDeployPath) {
 static bool CreateAndStartVirtualCamera() {
     // sourceId MUST be the CLSID string of our custom IMFMediaSource — nullptr = E_INVALIDARG
     wchar_t sourceId[64] = {};
-    StringFromGUID2(CLSID_FormatBoyVirtualCameraMF, sourceId, 64);
+    StringFromGUID2(CLSID_HenshinVirtualCameraMF, sourceId, 64);
 
     ComPtr<IMFVirtualCamera> cam;
     HRESULT hr = MFCreateVirtualCamera(
@@ -616,7 +621,7 @@ static bool CreateAndStartVirtualCamera() {
 // ---------------------------------------------------------------------------
 static void RemoveVirtualCameraByFriendlyName(const wchar_t* friendlyName) {
     wchar_t sourceId[64] = {};
-    StringFromGUID2(CLSID_FormatBoyVirtualCameraMF, sourceId, 64);
+    StringFromGUID2(CLSID_HenshinVirtualCameraMF, sourceId, 64);
     ComPtr<IMFVirtualCamera> cam;
     if (SUCCEEDED(MFCreateVirtualCamera(
             MFVirtualCameraType_SoftwareCameraSource,
@@ -675,7 +680,7 @@ static int CmdInstall(bool allUsers) {
         : ([]() {
               wchar_t buf[MAX_PATH] = {};
               SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, buf);
-              return std::wstring(buf) + L"\\FormatBoyCam";
+              return std::wstring(buf) + L"\\HenshinCam";
           })();
 
     EnsureDir(deployDir.c_str());
@@ -722,7 +727,7 @@ static int CmdInstall(bool allUsers) {
 
     MFShutdown();
     CoUninitialize();
-    wprintf(L"[OK] CALL ME installed successfully\n");
+    wprintf(L"[OK] Henshin 変身 installed successfully\n");
     return 0;
 }
 
@@ -742,14 +747,14 @@ static int CmdRemove(bool unregisterCom) {
     if (unregisterCom) {
         // Remove MF CLSID
         wchar_t clsidStr[64] = {};
-        StringFromGUID2(CLSID_FormatBoyVirtualCameraMF, clsidStr, 64);
+        StringFromGUID2(CLSID_HenshinVirtualCameraMF, clsidStr, 64);
         wchar_t key[256];
         _snwprintf_s(key, _countof(key), _TRUNCATE,
             L"SOFTWARE\\Classes\\CLSID\\%s", clsidStr);
         RegDeleteTreeW(HKEY_LOCAL_MACHINE, key);
 
         // Remove DS CLSID
-        StringFromGUID2(CLSID_FormatBoyVirtualCameraDS, clsidStr, 64);
+        StringFromGUID2(CLSID_HenshinVirtualCameraDS, clsidStr, 64);
         _snwprintf_s(key, _countof(key), _TRUNCATE,
             L"SOFTWARE\\Classes\\CLSID\\%s", clsidStr);
         RegDeleteTreeW(HKEY_LOCAL_MACHINE, key);
@@ -766,7 +771,7 @@ static int CmdRemove(bool unregisterCom) {
 
     MFShutdown();
     CoUninitialize();
-    wprintf(L"[OK] CALL ME removed\n");
+    wprintf(L"[OK] Henshin 変身 removed\n");
     return 0;
 }
 
@@ -800,11 +805,11 @@ static int CmdProbe() {
     }
 
     // 2. COM CLSIDs registered
-    if (!IsClsidRegistered(CLSID_FormatBoyVirtualCameraMF)) {
+    if (!IsClsidRegistered(CLSID_HenshinVirtualCameraMF)) {
         wprintf(L"[PROBE FAIL] MF CLSID not in registry\n");
         healthy = false;
     }
-    if (!IsClsidRegistered(CLSID_FormatBoyVirtualCameraDS)) {
+    if (!IsClsidRegistered(CLSID_HenshinVirtualCameraDS)) {
         wprintf(L"[PROBE FAIL] DS CLSID not in registry\n");
         healthy = false;
     }
@@ -812,7 +817,7 @@ static int CmdProbe() {
     // 3. MFCreateVirtualCamera round-trip (Windows 11 only)
     if (IsWindows11OrGreater() && healthy) {
         wchar_t sourceId[64] = {};
-        StringFromGUID2(CLSID_FormatBoyVirtualCameraMF, sourceId, 64);
+        StringFromGUID2(CLSID_HenshinVirtualCameraMF, sourceId, 64);
         ComPtr<IMFVirtualCamera> cam;
         HRESULT hr = MFCreateVirtualCamera(
             MFVirtualCameraType_SoftwareCameraSource,
@@ -857,7 +862,7 @@ static int CmdProbe() {
     CoUninitialize();
 
     if (healthy) {
-        wprintf(L"[PROBE OK] CALL ME registration is healthy\n");
+        wprintf(L"[PROBE OK] Henshin 変身 registration is healthy\n");
         return 0;
     }
     return 1;
@@ -868,7 +873,7 @@ static int CmdProbe() {
 // ---------------------------------------------------------------------------
 int wmain(int argc, wchar_t* argv[]) {
     if (argc < 2) {
-        wprintf(L"Usage: formatboy_cam_registrar <install|remove|probe> [--all-users] [--unregister-com]\n");
+        wprintf(L"Usage: henshin_cam_registrar <install|remove|probe> [--all-users] [--unregister-com]\n");
         return 1;
     }
 

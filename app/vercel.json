@@ -1,16 +1,30 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "bunVersion": "1.x",
+  "framework": "vite",
+  "installCommand": "bun install --frozen-lockfile",
+  "buildCommand": "bun run vercel:build",
+  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/api/morphly-token",
       "destination": "/api/start-session?action=morphly-token"
     },
     {
-      "source": "/api/payment/crypto-submit",
-      "destination": "/api/wallet?action=crypto-submit"
+      "source": "/api/payment/fapshi-init",
+      "destination": "/api/wallet?action=fapshi-init"
     },
     {
-      "source": "/api/payment-methods",
-      "destination": "/api/wallet?action=payment-methods"
+      "source": "/api/payment/fapshi-return",
+      "destination": "/api/wallet?action=fapshi-return"
+    },
+    {
+      "source": "/api/payment/fapshi-status",
+      "destination": "/api/wallet?action=fapshi-status"
+    },
+    {
+      "source": "/api/payment/fapshi-webhook",
+      "destination": "/api/wallet?action=fapshi-webhook"
     }
   ]
 }

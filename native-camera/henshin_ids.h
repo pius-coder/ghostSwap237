@@ -12,29 +12,29 @@
 // ---------------------------------------------------------------------------
 
 // {4F8B2E01-3C7D-4A9F-B6E2-8D1C5A3F9B7E}  MF virtual camera source CLSID
-DEFINE_GUID(CLSID_FormatBoyVirtualCameraMF,
+DEFINE_GUID(CLSID_HenshinVirtualCameraMF,
     0x4F8B2E01, 0x3C7D, 0x4A9F,
     0xB6, 0xE2, 0x8D, 0x1C, 0x5A, 0x3F, 0x9B, 0x7E);
 
 // {7E3A1D52-6F8B-4C2E-A5D9-3B7E1F6C8D4A}  DirectShow filter CLSID
-DEFINE_GUID(CLSID_FormatBoyVirtualCameraDS,
+DEFINE_GUID(CLSID_HenshinVirtualCameraDS,
     0x7E3A1D52, 0x6F8B, 0x4C2E,
     0xA5, 0xD9, 0x3B, 0x7E, 0x1F, 0x6C, 0x8D, 0x4A);
 
 // ---------------------------------------------------------------------------
 // Camera identity strings
 // ---------------------------------------------------------------------------
-static const wchar_t kCameraFriendlyName[] = L"CALL ME";
-static const wchar_t kMFDllName[]          = L"FormatBoyVirtualCameraMF.dll";
-static const wchar_t kDSDllName[]          = L"FormatBoyVirtualCamera.dll";
-static const wchar_t kPublisherExeName[]   = L"formatboy_cam_pipe_publisher.exe";
-static const wchar_t kRegistrarExeName[]   = L"formatboy_cam_registrar.exe";
+static const wchar_t kCameraFriendlyName[] = L"Henshin \u5909\u8EAB";
+static const wchar_t kMFDllName[]          = L"HenshinVirtualCameraMF.dll";
+static const wchar_t kDSDllName[]          = L"HenshinVirtualCamera.dll";
+static const wchar_t kPublisherExeName[]   = L"henshin_cam_pipe_publisher.exe";
+static const wchar_t kRegistrarExeName[]   = L"henshin_cam_registrar.exe";
 
 // ---------------------------------------------------------------------------
 // File bridge — MUST be accessible from Session 0 (FrameServer).
 // Do NOT use %LOCALAPPDATA% or per-user paths.
 // ---------------------------------------------------------------------------
-inline std::wstring FormatBoyJoinPath(const std::wstring& base, const wchar_t* leaf) {
+inline std::wstring HenshinJoinPath(const std::wstring& base, const wchar_t* leaf) {
     if (base.empty()) return std::wstring(leaf);
     if (base.back() == L'\\') return base + leaf;
     return base + L"\\" + leaf;
@@ -51,37 +51,37 @@ inline std::wstring GetKnownFolderOrFallback(REFKNOWNFOLDERID folderId, const wc
 }
 
 inline std::wstring GetFileBridgeDirPath() {
-    return FormatBoyJoinPath(
+    return HenshinJoinPath(
         GetKnownFolderOrFallback(FOLDERID_PublicDocuments, L"C:\\Users\\Public\\Documents"),
-        L"FormatBoyCam");
+        L"HenshinCam");
 }
 
 inline std::wstring GetFileBridgePath() {
-    return FormatBoyJoinPath(GetFileBridgeDirPath(), L"mf-bridge.bin");
+    return HenshinJoinPath(GetFileBridgeDirPath(), L"mf-bridge.bin");
 }
 
 // ---------------------------------------------------------------------------
 // DLL deployment path — accessible from Session 0 / FrameServer.
 // ---------------------------------------------------------------------------
 inline std::wstring GetDllDeployDirPath() {
-    return FormatBoyJoinPath(
+    return HenshinJoinPath(
         GetKnownFolderOrFallback(FOLDERID_ProgramData, L"C:\\ProgramData"),
-        L"FormatBoyCam");
+        L"HenshinCam");
 }
 
 inline std::wstring GetRuntimeLogPath() {
-    return FormatBoyJoinPath(GetDllDeployDirPath(), L"mf_runtime.log");
+    return HenshinJoinPath(GetDllDeployDirPath(), L"mf_runtime.log");
 }
 
 inline std::wstring GetQiLogPath() {
-    return FormatBoyJoinPath(GetDllDeployDirPath(), L"mf_qi.log");
+    return HenshinJoinPath(GetDllDeployDirPath(), L"mf_qi.log");
 }
 
 // ---------------------------------------------------------------------------
 // Named shared memory (fallback if file bridge fails)
 // ---------------------------------------------------------------------------
-static const wchar_t kGlobalSharedMemName[] = L"Global\\FormatBoyCam.FrameBuffer";
-static const wchar_t kLocalSharedMemName[]  = L"Local\\FormatBoyCam.FrameBuffer";
+static const wchar_t kGlobalSharedMemName[] = L"Global\\HenshinCam.FrameBuffer";
+static const wchar_t kLocalSharedMemName[]  = L"Local\\HenshinCam.FrameBuffer";
 
 // ---------------------------------------------------------------------------
 // Security descriptor — grants full access to:

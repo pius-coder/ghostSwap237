@@ -1,10 +1,10 @@
 // VirtualCameraService
 // Captures frames from a <video> or <canvas> element and sends them to the
-// Electron main process which writes them to the Format-Boy CAM pipe publisher.
+// Electron main process which writes them to the Henshin pipe publisher.
 //
 // Frame pipeline:
 //   Canvas (RGBA) → R↔B swap in main.js → PipeFrameHeader → publisher stdin
-//   → file bridge → FormatBoyVirtualCameraMF.dll → FrameServer → apps
+//   → file bridge → HenshinVirtualCameraMF.dll → FrameServer → apps
 
 declare global {
   interface Window {

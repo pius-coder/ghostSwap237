@@ -1,8 +1,8 @@
 #pragma once
 #include <cstdint>
 
-// Magic: "FBCM" (Format-Boy CaM)
-static constexpr uint32_t kFrameMagic       = 0x4642434D;
+// Magic: "HNSH" (Henshin)
+static constexpr uint32_t kFrameMagic       = 0x484E5348;
 static constexpr uint32_t kProtocolVersion  = 1;
 static constexpr uint32_t kPixelFormatBgra32 = 1;
 

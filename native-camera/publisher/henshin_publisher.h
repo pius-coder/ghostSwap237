@@ -4,15 +4,14 @@
 #include <windows.h>
 #include <cstdint>
 
-// ---------------------------------------------------------------------------
-// FormatBoyPublisher
+// HenshinPublisher
 // Opens the file bridge at kFileBridgePath, writes BGRA frames using the
-// seqlock protocol defined in formatboy_protocol.h.
+// seqlock protocol defined in henshin_protocol.h.
 // ---------------------------------------------------------------------------
-class FormatBoyPublisher {
+class HenshinPublisher {
 public:
-    FormatBoyPublisher();
-    ~FormatBoyPublisher();
+    HenshinPublisher();
+    ~HenshinPublisher();
 
     // Open the file bridge.  Must be called once before WriteFrame.
     bool Open(uint32_t width, uint32_t height,

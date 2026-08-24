@@ -1,4 +1,4 @@
-LIBRARY "FormatBoyVirtualCameraMF"
+LIBRARY "HenshinVirtualCameraMF"
 EXPORTS
     DllGetClassObject   PRIVATE
     DllCanUnloadNow     PRIVATE

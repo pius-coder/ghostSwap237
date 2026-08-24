@@ -1,178 +1,104 @@
 // @ts-nocheck
-import { supabaseAdmin, supabaseAdminConfigError } from '../api/supabase.js';
+import {
+  authorizedUserIds,
+  requireAuthUser,
+  requireAuthorizedUser,
+  sendApiError,
+} from '../api/auth.js';
 import { getWalletByUserId } from '../api/credit-utils.js';
+import { supabaseAdmin } from '../api/supabase.js';
 
 const MORPHLY_SESSION_URL = 'https://api.morphly.fun/v1/realtime/sessions';
 const MORPHLY_REALTIME_MODEL = 'lucy-2.5';
 const MAX_MORPHLY_SESSION_SECONDS = 300;
 
-function getRequestedUserId(req) {
-  const queryUserId = Array.isArray(req.query?.userId)
-    ? req.query.userId[0]
-    : req.query?.userId;
-  const bodyUserId = req.body?.userId;
-  return String(queryUserId || bodyUserId || '').trim();
-}
-
-function getRequestedDuration(value) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return MAX_MORPHLY_SESSION_SECONDS;
-  }
-
-  return Math.min(Math.round(parsed), MAX_MORPHLY_SESSION_SECONDS);
+function requestedDuration(value) {
+  const duration = Number(value);
+  return Number.isFinite(duration) && duration > 0
+    ? Math.min(Math.round(duration), MAX_MORPHLY_SESSION_SECONDS)
+    : MAX_MORPHLY_SESSION_SECONDS;
 }
 
 export function normalizeRequestedOrigin(value) {
-  if (typeof value !== 'string') return '';
-
-  const requestedOrigin = value.trim();
-  if (!requestedOrigin || requestedOrigin === 'null') return '';
-
+  if (typeof value !== 'string' || !value.trim() || value.trim() === 'null') return '';
   try {
-    const parsed = new URL(requestedOrigin);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
-    return parsed.origin;
+    const parsed = new URL(value.trim());
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : '';
   } catch {
     return '';
   }
 }
 
+async function findActiveSession(req, authUser) {
+  const requestedUserId = String(req.body?.userId || req.query?.userId || '').trim();
+  const requestedSessionId = String(req.body?.sessionId || req.query?.sessionId || '').trim();
+  const userIds = requestedUserId
+    ? [(await requireAuthorizedUser(req, requestedUserId)).userId]
+    : await authorizedUserIds(authUser);
+
+  let query = supabaseAdmin
+    .from('sessions')
+    .select('id, user_id')
+    .in('user_id', userIds)
+    .eq('provider', 'morphly')
+    .eq('status', 'active')
+    .order('start_time', { ascending: false })
+    .limit(1);
+  if (requestedSessionId) query = query.eq('id', requestedSessionId);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export default async function handler(req, res, options = {}) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Cache-Control', 'private, no-store');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') {
-    return res.status(405).json({
-      error: 'Method not allowed',
-      code: 'METHOD_NOT_ALLOWED',
-    });
-  }
-
-  if (!supabaseAdmin) {
-    return res.status(503).json({
-      error: supabaseAdminConfigError,
-      code: 'SERVER_CONFIGURATION_ERROR',
-    });
-  }
-
-  const morphlyApiKey = options.morphlyApiKey || process.env.MORPHLY_API_KEY;
-  if (!morphlyApiKey) {
-    return res.status(500).json({
-      error: 'Morphly is not configured on the server.',
-      code: 'MORPHLY_API_KEY_MISSING',
-    });
-  }
-
-  const userId = getRequestedUserId(req);
-  if (!userId) {
-    return res.status(400).json({
-      error: 'User ID is required',
-      code: 'USER_ID_REQUIRED',
-    });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const wallet = await getWalletByUserId(userId, { createIfMissing: true });
-    if (!wallet || wallet.credits <= 0) {
-      return res.status(402).json({
-        error: 'Insufficient credits',
-        code: 'INSUFFICIENT_CREDITS',
-      });
-    }
-
-    const { data: activeSession, error: activeSessionError } = await supabaseAdmin
-      .from('sessions')
-      .select('id, metadata')
-      .eq('user_id', userId)
-      .eq('status', 'active')
-      .order('start_time', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (activeSessionError) {
-      console.error('Morphly active-session lookup failed:', activeSessionError);
-      return res.status(500).json({
-        error: 'Could not verify the active session',
-        code: 'ACTIVE_SESSION_LOOKUP_FAILED',
-      });
-    }
-
-    if (!activeSession) {
+    const authUser = await requireAuthUser(req);
+    const session = await findActiveSession(req, authUser);
+    if (!session) {
       return res.status(409).json({
-        error: 'Start an app session before requesting a Morphly credential.',
+        error: 'An active Morphly app session is required',
         code: 'APP_SESSION_REQUIRED',
       });
     }
 
-    // Electron pages use file://, whose browser origin is the literal string
-    // "null". Morphly only needs a web origin for browser-origin enforcement,
-    // so omit non-HTTP origins instead of forwarding an unusable provider
-    // constraint into realtime session creation.
-    const requestedOrigin = normalizeRequestedOrigin(req.body?.origin);
-    const upstreamBody = {
-      model: MORPHLY_REALTIME_MODEL,
-      max_session_seconds: getRequestedDuration(req.body?.maxSessionSeconds),
-      ...(requestedOrigin ? { origin: requestedOrigin } : {}),
-    };
+    const wallet = await getWalletByUserId(session.user_id, { createIfMissing: false });
+    if (!wallet || wallet.credits <= 0) {
+      return res.status(402).json({ error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS' });
+    }
 
+    const apiKey = options.morphlyApiKey || process.env.MORPHLY_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ error: 'Morphly is not configured on the server', code: 'MORPHLY_API_KEY_MISSING' });
+    }
+
+    const origin = normalizeRequestedOrigin(req.body?.origin);
     const upstream = await fetch(MORPHLY_SESSION_URL, {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${morphlyApiKey}`,
+        authorization: `Bearer ${apiKey}`,
         'content-type': 'application/json',
-        'idempotency-key': crypto.randomUUID(),
+        'idempotency-key': String(req.body?.clientSessionId || session.id),
       },
-      body: JSON.stringify(upstreamBody),
+      body: JSON.stringify({
+        model: MORPHLY_REALTIME_MODEL,
+        max_session_seconds: requestedDuration(req.body?.maxSessionSeconds),
+        ...(origin ? { origin } : {}),
+      }),
     });
-
-    const result = await upstream.json().catch(() => ({
+    const body = await upstream.json().catch(() => ({
       error: `Morphly returned HTTP ${upstream.status}`,
       code: `HTTP_${upstream.status}`,
     }));
-
-    if (!upstream.ok) {
-      console.error('Morphly session creation failed:', {
-        status: upstream.status,
-        code: result?.code || null,
-      });
-      return res.status(upstream.status).json(result);
-    }
-
-    // A session created by /start-session is only billable once a realtime
-    // credential exists. This route is the final server-side step before the
-    // desktop client can connect, so recording it here prevents a rejected
-    // provider request from being charged when the client cleans up.
-    const metadata = activeSession.metadata && typeof activeSession.metadata === 'object'
-      ? activeSession.metadata
-      : {};
-    const { error: activationError } = await supabaseAdmin
-      .from('sessions')
-      .update({
-        metadata: {
-          ...metadata,
-          realtime_credential_issued_at: new Date().toISOString(),
-        },
-      })
-      .eq('id', activeSession.id)
-      .eq('status', 'active');
-
-    if (activationError) {
-      console.error('Could not activate billable realtime session:', activationError);
-      return res.status(500).json({
-        error: 'Could not prepare the realtime session.',
-        code: 'SESSION_ACTIVATION_FAILED',
-      });
-    }
-
-    return res.status(upstream.status).json(result);
+    if (!upstream.ok) console.error('Morphly session creation failed:', upstream.status, body?.code);
+    return res.status(upstream.status).json(body);
   } catch (error) {
-    console.error('Morphly token route failed:', error);
-    return res.status(502).json({
-      error: 'Could not reach Morphly.',
-      code: 'MORPHLY_UNAVAILABLE',
-    });
+    return sendApiError(res, error, 'Could not reach Morphly');
   }
 }

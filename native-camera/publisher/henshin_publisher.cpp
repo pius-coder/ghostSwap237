@@ -1,8 +1,8 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
-#include "formatboy_publisher.h"
-#include "../formatboy_protocol.h"
-#include "../formatboy_ids.h"
+#include "henshin_publisher.h"
+#include "../henshin_protocol.h"
+#include "../henshin_ids.h"
 #include <aclapi.h>
 #include <sddl.h>
 #include <atomic>
@@ -10,11 +10,11 @@
 #include <algorithm>
 
 // ---------------------------------------------------------------------------
-FormatBoyPublisher::FormatBoyPublisher()  = default;
-FormatBoyPublisher::~FormatBoyPublisher() { Close(); }
+HenshinPublisher::HenshinPublisher()  = default;
+HenshinPublisher::~HenshinPublisher() { Close(); }
 
 // ---------------------------------------------------------------------------
-bool FormatBoyPublisher::EnsureBridgeDirectory() const {
+bool HenshinPublisher::EnsureBridgeDirectory() const {
     const std::wstring bridgeDir = GetFileBridgeDirPath();
 
     // Create directory; ignore ERROR_ALREADY_EXISTS
@@ -44,7 +44,7 @@ bool FormatBoyPublisher::EnsureBridgeDirectory() const {
 }
 
 // ---------------------------------------------------------------------------
-bool FormatBoyPublisher::CreateFileBridge() {
+bool HenshinPublisher::CreateFileBridge() {
     EnsureBridgeDirectory();
     const std::wstring bridgePath = GetFileBridgePath();
 
@@ -128,7 +128,7 @@ bool FormatBoyPublisher::CreateFileBridge() {
 }
 
 // ---------------------------------------------------------------------------
-bool FormatBoyPublisher::Open(uint32_t width, uint32_t height,
+bool HenshinPublisher::Open(uint32_t width, uint32_t height,
                                uint32_t fpsNum, uint32_t fpsDen) {
     Close();
     m_width     = width;
@@ -141,7 +141,7 @@ bool FormatBoyPublisher::Open(uint32_t width, uint32_t height,
 }
 
 // ---------------------------------------------------------------------------
-bool FormatBoyPublisher::WriteFrame(const uint8_t* bgraData,
+bool HenshinPublisher::WriteFrame(const uint8_t* bgraData,
                                      uint32_t       dataBytes,
                                      int64_t        timestampHundredsOfNs) {
     if (!m_pView || !bgraData) return false;
@@ -195,7 +195,7 @@ bool FormatBoyPublisher::WriteFrame(const uint8_t* bgraData,
 }
 
 // ---------------------------------------------------------------------------
-void FormatBoyPublisher::Close() {
+void HenshinPublisher::Close() {
     if (m_pView) {
         FlushViewOfFile(m_pView, 0);
         UnmapViewOfFile(m_pView);

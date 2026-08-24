@@ -1,12 +1,12 @@
-// Format-Boy CAM — DirectShow Virtual Camera Filter implementation
+// Henshin CAM — DirectShow Virtual Camera Filter implementation
 // Windows 10 / OBS / legacy app support.
 // Output: YUY2 @ 1280×720 @ 30 fps.
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include "ds_virtual_camera.h"
-#include "../formatboy_protocol.h"
-#include "../formatboy_ids.h"
+#include "../henshin_protocol.h"
+#include "../henshin_ids.h"
 #include <uuids.h>     // MEDIASUBTYPE_YUY2, FORMAT_VideoInfo, etc.
 #include <dvdmedia.h>  // VIDEOINFOHEADER
 #include <cstring>
@@ -61,26 +61,26 @@ static bool BuildYuy2MediaType(AM_MEDIA_TYPE* pmt,
 }
 
 // ===========================================================================
-// CFormatBoyDSFilter
+// CHenshinDSFilter
 // ===========================================================================
 
-CFormatBoyDSFilter::CFormatBoyDSFilter() : m_pin(this) {
+CHenshinDSFilter::CHenshinDSFilter() : m_pin(this) {
     InitializeCriticalSection(&m_cs);
 }
-CFormatBoyDSFilter::~CFormatBoyDSFilter() {
+CHenshinDSFilter::~CHenshinDSFilter() {
     DeleteCriticalSection(&m_cs);
 }
 
-HRESULT CFormatBoyDSFilter::CreateInstance(REFIID riid, void** ppv) {
+HRESULT CHenshinDSFilter::CreateInstance(REFIID riid, void** ppv) {
     *ppv = nullptr;
-    auto* p = new (std::nothrow) CFormatBoyDSFilter();
+    auto* p = new (std::nothrow) CHenshinDSFilter();
     if (!p) return E_OUTOFMEMORY;
     HRESULT hr = p->QueryInterface(riid, ppv);
     p->Release();
     return hr;
 }
 
-STDMETHODIMP CFormatBoyDSFilter::QueryInterface(REFIID riid, void** ppv) {
+STDMETHODIMP CHenshinDSFilter::QueryInterface(REFIID riid, void** ppv) {
     if (!ppv) return E_POINTER;
     *ppv = nullptr;
     if (riid == IID_IUnknown || riid == IID_IBaseFilter ||
@@ -94,20 +94,20 @@ STDMETHODIMP CFormatBoyDSFilter::QueryInterface(REFIID riid, void** ppv) {
     }
     return E_NOINTERFACE;
 }
-STDMETHODIMP_(ULONG) CFormatBoyDSFilter::AddRef()  { return ++m_ref; }
-STDMETHODIMP_(ULONG) CFormatBoyDSFilter::Release() {
+STDMETHODIMP_(ULONG) CHenshinDSFilter::AddRef()  { return ++m_ref; }
+STDMETHODIMP_(ULONG) CHenshinDSFilter::Release() {
     ULONG r = --m_ref;
     if (r == 0) delete this;
     return r;
 }
 
-STDMETHODIMP CFormatBoyDSFilter::GetClassID(CLSID* p) {
+STDMETHODIMP CHenshinDSFilter::GetClassID(CLSID* p) {
     if (!p) return E_POINTER;
-    *p = CLSID_FormatBoyVirtualCameraDS;
+    *p = CLSID_HenshinVirtualCameraDS;
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyDSFilter::Stop() {
+STDMETHODIMP CHenshinDSFilter::Stop() {
     m_pin.Inactive();
     EnterCriticalSection(&m_cs);
     m_state = State_Stopped;
@@ -115,14 +115,14 @@ STDMETHODIMP CFormatBoyDSFilter::Stop() {
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyDSFilter::Pause() {
+STDMETHODIMP CHenshinDSFilter::Pause() {
     EnterCriticalSection(&m_cs);
     m_state = State_Paused;
     LeaveCriticalSection(&m_cs);
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyDSFilter::Run(REFERENCE_TIME) {
+STDMETHODIMP CHenshinDSFilter::Run(REFERENCE_TIME) {
     EnterCriticalSection(&m_cs);
     m_state = State_Running;
     LeaveCriticalSection(&m_cs);
@@ -130,13 +130,13 @@ STDMETHODIMP CFormatBoyDSFilter::Run(REFERENCE_TIME) {
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyDSFilter::GetState(DWORD, FILTER_STATE* pState) {
+STDMETHODIMP CHenshinDSFilter::GetState(DWORD, FILTER_STATE* pState) {
     if (!pState) return E_POINTER;
     *pState = m_state;
     return S_OK;
 }
-STDMETHODIMP CFormatBoyDSFilter::SetSyncSource(IReferenceClock*) { return S_OK; }
-STDMETHODIMP CFormatBoyDSFilter::GetSyncSource(IReferenceClock** pp) {
+STDMETHODIMP CHenshinDSFilter::SetSyncSource(IReferenceClock*) { return S_OK; }
+STDMETHODIMP CHenshinDSFilter::GetSyncSource(IReferenceClock** pp) {
     if (pp) *pp = nullptr; return S_OK;
 }
 
@@ -171,13 +171,13 @@ private:
     ULONG m_pos = 0;
 };
 
-STDMETHODIMP CFormatBoyDSFilter::EnumPins(IEnumPins** pp) {
+STDMETHODIMP CHenshinDSFilter::EnumPins(IEnumPins** pp) {
     if (!pp) return E_POINTER;
     *pp = new (std::nothrow) CEnumPins(static_cast<IPin*>(&m_pin));
     return *pp ? S_OK : E_OUTOFMEMORY;
 }
 
-STDMETHODIMP CFormatBoyDSFilter::FindPin(LPCWSTR id, IPin** pp) {
+STDMETHODIMP CHenshinDSFilter::FindPin(LPCWSTR id, IPin** pp) {
     if (!pp) return E_POINTER;
     if (wcscmp(id, L"Output") == 0) {
         *pp = static_cast<IPin*>(&m_pin);
@@ -188,7 +188,7 @@ STDMETHODIMP CFormatBoyDSFilter::FindPin(LPCWSTR id, IPin** pp) {
     return VFW_E_NOT_FOUND;
 }
 
-STDMETHODIMP CFormatBoyDSFilter::QueryFilterInfo(FILTER_INFO* pfi) {
+STDMETHODIMP CHenshinDSFilter::QueryFilterInfo(FILTER_INFO* pfi) {
     if (!pfi) return E_POINTER;
     wcscpy_s(pfi->achName, kCameraFriendlyName);
     pfi->pGraph = m_pGraph;
@@ -196,25 +196,25 @@ STDMETHODIMP CFormatBoyDSFilter::QueryFilterInfo(FILTER_INFO* pfi) {
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyDSFilter::JoinFilterGraph(IFilterGraph* pGraph, LPCWSTR pName) {
+STDMETHODIMP CHenshinDSFilter::JoinFilterGraph(IFilterGraph* pGraph, LPCWSTR pName) {
     m_pGraph = pGraph;
     if (pName) wcscpy_s(m_name, pName);
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyDSFilter::QueryVendorInfo(LPWSTR* pp) {
+STDMETHODIMP CHenshinDSFilter::QueryVendorInfo(LPWSTR* pp) {
     if (pp) *pp = nullptr; return E_NOTIMPL;
 }
 
 // ===========================================================================
-// CFormatBoyOutputPin
+// CHenshinOutputPin
 // ===========================================================================
 
-CFormatBoyOutputPin::CFormatBoyOutputPin(CFormatBoyDSFilter* f) : m_pFilter(f) {
+CHenshinOutputPin::CHenshinOutputPin(CHenshinDSFilter* f) : m_pFilter(f) {
     InitializeCriticalSection(&m_cs);
 }
 
-CFormatBoyOutputPin::~CFormatBoyOutputPin() {
+CHenshinOutputPin::~CHenshinOutputPin() {
     Inactive();
     if (m_pView)   { UnmapViewOfFile(m_pView);  m_pView = nullptr; }
     if (m_hMap)    { CloseHandle(m_hMap);        m_hMap  = NULL; }
@@ -224,7 +224,7 @@ CFormatBoyOutputPin::~CFormatBoyOutputPin() {
     DeleteCriticalSection(&m_cs);
 }
 
-STDMETHODIMP CFormatBoyOutputPin::QueryInterface(REFIID riid, void** ppv) {
+STDMETHODIMP CHenshinOutputPin::QueryInterface(REFIID riid, void** ppv) {
     if (!ppv) return E_POINTER;
     *ppv = nullptr;
     if (riid == IID_IUnknown || riid == IID_IPin) {
@@ -235,17 +235,17 @@ STDMETHODIMP CFormatBoyOutputPin::QueryInterface(REFIID riid, void** ppv) {
     }
     return E_NOINTERFACE;
 }
-STDMETHODIMP_(ULONG) CFormatBoyOutputPin::AddRef()  { return ++m_ref; }
-STDMETHODIMP_(ULONG) CFormatBoyOutputPin::Release() {
+STDMETHODIMP_(ULONG) CHenshinOutputPin::AddRef()  { return ++m_ref; }
+STDMETHODIMP_(ULONG) CHenshinOutputPin::Release() {
     // Pin is owned by filter — don't delete independently
     return --m_ref;
 }
 
-bool CFormatBoyOutputPin::FillMediaType(AM_MEDIA_TYPE* pmt) const {
+bool CHenshinOutputPin::FillMediaType(AM_MEDIA_TYPE* pmt) const {
     return BuildYuy2MediaType(pmt);
 }
 
-STDMETHODIMP CFormatBoyOutputPin::Connect(IPin* pReceivePin, const AM_MEDIA_TYPE* pmt) {
+STDMETHODIMP CHenshinOutputPin::Connect(IPin* pReceivePin, const AM_MEDIA_TYPE* pmt) {
     if (!pReceivePin) return E_POINTER;
 
     AM_MEDIA_TYPE mt = {};
@@ -287,31 +287,31 @@ STDMETHODIMP CFormatBoyOutputPin::Connect(IPin* pReceivePin, const AM_MEDIA_TYPE
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyOutputPin::ReceiveConnection(IPin*, const AM_MEDIA_TYPE*) {
+STDMETHODIMP CHenshinOutputPin::ReceiveConnection(IPin*, const AM_MEDIA_TYPE*) {
     return E_UNEXPECTED; // output pin doesn't receive connections
 }
 
-STDMETHODIMP CFormatBoyOutputPin::Disconnect() {
+STDMETHODIMP CHenshinOutputPin::Disconnect() {
     Inactive();
     if (m_pMemInput) { m_pMemInput->Release(); m_pMemInput = nullptr; }
     if (m_pConnected){ m_pConnected->Release(); m_pConnected = nullptr; }
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyOutputPin::ConnectedTo(IPin** pp) {
+STDMETHODIMP CHenshinOutputPin::ConnectedTo(IPin** pp) {
     if (!pp) return E_POINTER;
     *pp = m_pConnected;
     if (*pp) (*pp)->AddRef();
     return *pp ? S_OK : VFW_E_NOT_CONNECTED;
 }
 
-STDMETHODIMP CFormatBoyOutputPin::ConnectionMediaType(AM_MEDIA_TYPE* pmt) {
+STDMETHODIMP CHenshinOutputPin::ConnectionMediaType(AM_MEDIA_TYPE* pmt) {
     if (!pmt) return E_POINTER;
     if (!m_pConnected) return VFW_E_NOT_CONNECTED;
     return FillMediaType(pmt) ? S_OK : E_OUTOFMEMORY;
 }
 
-STDMETHODIMP CFormatBoyOutputPin::QueryPinInfo(PIN_INFO* pInfo) {
+STDMETHODIMP CHenshinOutputPin::QueryPinInfo(PIN_INFO* pInfo) {
     if (!pInfo) return E_POINTER;
     pInfo->pFilter = static_cast<IBaseFilter*>(m_pFilter);
     if (pInfo->pFilter) pInfo->pFilter->AddRef();
@@ -320,13 +320,13 @@ STDMETHODIMP CFormatBoyOutputPin::QueryPinInfo(PIN_INFO* pInfo) {
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyOutputPin::QueryDirection(PIN_DIRECTION* p) {
+STDMETHODIMP CHenshinOutputPin::QueryDirection(PIN_DIRECTION* p) {
     if (!p) return E_POINTER;
     *p = PINDIR_OUTPUT;
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyOutputPin::QueryId(LPWSTR* pp) {
+STDMETHODIMP CHenshinOutputPin::QueryId(LPWSTR* pp) {
     if (!pp) return E_POINTER;
     *pp = (LPWSTR)CoTaskMemAlloc(sizeof(L"Output"));
     if (!*pp) return E_OUTOFMEMORY;
@@ -334,7 +334,7 @@ STDMETHODIMP CFormatBoyOutputPin::QueryId(LPWSTR* pp) {
     return S_OK;
 }
 
-STDMETHODIMP CFormatBoyOutputPin::QueryAccept(const AM_MEDIA_TYPE* pmt) {
+STDMETHODIMP CHenshinOutputPin::QueryAccept(const AM_MEDIA_TYPE* pmt) {
     if (!pmt) return E_POINTER;
     if (pmt->majortype != MEDIATYPE_Video) return S_FALSE;
     if (pmt->subtype   != MEDIASUBTYPE_YUY2 &&
@@ -371,23 +371,23 @@ private:
     ULONG m_pos;
 };
 
-STDMETHODIMP CFormatBoyOutputPin::EnumMediaTypes(IEnumMediaTypes** pp) {
+STDMETHODIMP CHenshinOutputPin::EnumMediaTypes(IEnumMediaTypes** pp) {
     if (!pp) return E_POINTER;
     *pp = new (std::nothrow) CEnumMT();
     return *pp ? S_OK : E_OUTOFMEMORY;
 }
 
-STDMETHODIMP CFormatBoyOutputPin::QueryInternalConnections(IPin**, ULONG* n) {
+STDMETHODIMP CHenshinOutputPin::QueryInternalConnections(IPin**, ULONG* n) {
     if (n) *n = 0; return E_NOTIMPL;
 }
-STDMETHODIMP CFormatBoyOutputPin::EndOfStream()  { return S_OK; }
-STDMETHODIMP CFormatBoyOutputPin::BeginFlush()   { return S_OK; }
-STDMETHODIMP CFormatBoyOutputPin::EndFlush()     { return S_OK; }
-STDMETHODIMP CFormatBoyOutputPin::NewSegment(REFERENCE_TIME,REFERENCE_TIME,double) { return S_OK; }
+STDMETHODIMP CHenshinOutputPin::EndOfStream()  { return S_OK; }
+STDMETHODIMP CHenshinOutputPin::BeginFlush()   { return S_OK; }
+STDMETHODIMP CHenshinOutputPin::EndFlush()     { return S_OK; }
+STDMETHODIMP CHenshinOutputPin::NewSegment(REFERENCE_TIME,REFERENCE_TIME,double) { return S_OK; }
 
 // Delivery -------------------------------------------------------------------
 
-HRESULT CFormatBoyOutputPin::TryOpenBridge() {
+HRESULT CHenshinOutputPin::TryOpenBridge() {
     if (m_pView) return S_OK;
     const std::wstring bridgePath = GetFileBridgePath();
     m_hFile = CreateFileW(bridgePath.c_str(), GENERIC_READ,
@@ -409,19 +409,19 @@ HRESULT CFormatBoyOutputPin::TryOpenBridge() {
     return S_OK;
 }
 
-HRESULT CFormatBoyOutputPin::Active() {
+HRESULT CHenshinOutputPin::Active() {
     bool was = m_running.exchange(true);
-    if (!was) m_thread = std::thread(&CFormatBoyOutputPin::DeliveryThread, this);
+    if (!was) m_thread = std::thread(&CHenshinOutputPin::DeliveryThread, this);
     return S_OK;
 }
 
-HRESULT CFormatBoyOutputPin::Inactive() {
+HRESULT CHenshinOutputPin::Inactive() {
     m_running = false;
     if (m_thread.joinable()) m_thread.join();
     return S_OK;
 }
 
-void CFormatBoyOutputPin::DeliveryThread() {
+void CHenshinOutputPin::DeliveryThread() {
     constexpr DWORD kFrameMs = 1000 / kDefaultFpsNum;
     uint64_t lastCounter = 0;
     std::vector<uint8_t> scratch;
@@ -483,7 +483,7 @@ void CFormatBoyOutputPin::DeliveryThread() {
 // YUY2 packing: [Y0, Cb, Y1, Cr] per 2-pixel horizontal pair
 // Input BGRA: [B, G, R, A]
 
-void CFormatBoyOutputPin::BgraToYuy2(const uint8_t* bgra, uint32_t w, uint32_t h,
+void CHenshinOutputPin::BgraToYuy2(const uint8_t* bgra, uint32_t w, uint32_t h,
                                       uint8_t* yuy2) {
     for (uint32_t row = 0; row < h; ++row) {
         for (uint32_t col = 0; col < w; col += 2) {

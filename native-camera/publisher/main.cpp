@@ -1,4 +1,4 @@
-// formatboy_cam_pipe_publisher — reads BGRA frames from stdin (written by
+// henshin_cam_pipe_publisher — reads BGRA frames from stdin (written by
 // Electron) and writes them to the file bridge for the MF/DS camera DLLs.
 //
 // Stdin protocol (40-byte PipeFrameHeader followed by raw BGRA payload):
@@ -14,8 +14,8 @@
 #include <cstring>
 #include <vector>
 
-#include "formatboy_publisher.h"
-#include "../formatboy_protocol.h"
+#include "henshin_publisher.h"
+#include "../henshin_protocol.h"
 
 // ---------------------------------------------------------------------------
 // ReadAll — blocks until exactly `count` bytes have been read from `h`.
@@ -42,7 +42,7 @@ int main() {
     HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
     if (hStdin == INVALID_HANDLE_VALUE || hStdin == nullptr) return 1;
 
-    FormatBoyPublisher publisher;
+    HenshinPublisher publisher;
     bool               opened = false;
 
     std::vector<uint8_t> pixelBuf;
