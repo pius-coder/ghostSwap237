@@ -2,6 +2,11 @@ name: Build and Release
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build
+        required: true
+        default: v2.0.25
   push:
     tags:
       - 'v*.*.*'
@@ -12,6 +17,8 @@ permissions:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
     steps:
       - name: Checkout
@@ -31,7 +38,7 @@ jobs:
         working-directory: app
         shell: powershell
         run: |
-          $version = '${{ github.ref_name }}' -replace '^v', ''
+          $version = '${{ env.RELEASE_TAG }}' -replace '^v', ''
           bun run release:sync $version
           $packageVersion = (Get-Content -LiteralPath 'package.json' -Raw | ConvertFrom-Json).version
           if ($packageVersion -ne $version) {
@@ -99,7 +106,7 @@ jobs:
         id: artifact
         shell: powershell
         run: |
-          $version = '${{ github.ref_name }}' -replace '^v', ''
+          $version = '${{ env.RELEASE_TAG }}' -replace '^v', ''
           $name = "Henshin-Setup-$version.exe"
           $path = Join-Path '${{ github.workspace }}' "app/release/$name"
           if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -116,6 +123,7 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: |
             ${{ steps.artifact.outputs.installer }}
             ${{ steps.artifact.outputs.checksum }}
