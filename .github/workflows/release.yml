@@ -4,9 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to build
+        description: Release tag to build
         required: true
-        default: v2.0.25
+        default: v2.0.26
+      allow_unsigned:
+        description: Publish an unsigned test prerelease
+        required: true
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*.*.*'
@@ -19,6 +24,7 @@ jobs:
     runs-on: windows-latest
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      UNSIGNED_TEST: ${{ inputs.allow_unsigned || false }}
 
     steps:
       - name: Checkout
@@ -62,7 +68,12 @@ jobs:
           WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_PFX_PASSWORD)) {
-            throw 'Production releases require WINDOWS_PFX_BASE64 and WINDOWS_PFX_PASSWORD.'
+            if ($env:UNSIGNED_TEST -ne 'true') {
+              throw 'Production releases require WINDOWS_PFX_BASE64 and WINDOWS_PFX_PASSWORD.'
+            }
+            Write-Warning 'Publishing an explicitly authorized unsigned test prerelease.'
+            "CSC_IDENTITY_AUTO_DISCOVERY=false" >> $env:GITHUB_ENV
+            return
           }
           $pfxPath = Join-Path $env:RUNNER_TEMP 'henshin-signing.pfx'
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
@@ -124,11 +135,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ inputs.allow_unsigned || false }}
+          make_latest: ${{ inputs.allow_unsigned && 'false' || 'true' }}
           files: |
             ${{ steps.artifact.outputs.installer }}
             ${{ steps.artifact.outputs.checksum }}
           body: |
             ## Henshin ${{ env.RELEASE_TAG }}
+
+            ${{ inputs.allow_unsigned && '> **Unsigned test build:** Windows SmartScreen may display a warning. Use this build for testing only.' || '' }}
 
             Windows 11 x64, build 22000 or newer.
 

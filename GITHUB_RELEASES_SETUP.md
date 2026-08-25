@@ -30,7 +30,7 @@ Le workflow signe d'abord les quatre binaires camera avec `signtool`, puis trans
 Depuis `app`, synchronisez package, API et updater sans toucher `bun.lock`:
 
 ```powershell
-bun run release:sync 2.0.25
+bun run release:sync 2.0.26
 bun install --frozen-lockfile
 ```
 
@@ -49,18 +49,20 @@ bun run release:preflight
 bun run electron-builder --win nsis --publish never
 ```
 
-Le preflight verifie les quatre binaires, la version `2.0.25`, `Henshin-Setup-${version}.${ext}`, les variables navigateur, puis lint et build. Il ne compile rien sur le PC client.
+Le preflight verifie les quatre binaires, la version `2.0.26`, `Henshin-Setup-${version}.${ext}`, les variables navigateur, puis lint et build. Il ne compile rien sur le PC client.
 
 ## Publier
 
 La version du tag est la source de verite du job; le workflow la resynchronise sans npm lock:
 
 ```powershell
-git tag v2.0.25
-git push origin v2.0.25
+git tag v2.0.26
+git push origin v2.0.26
 ```
 
-Le workflow recherche exactement `app/release/Henshin-Setup-2.0.25.exe`, calcule SHA256, produit le fichier `.sha256`, puis charge les deux assets dans la release. `/api/version` selectionne uniquement le motif `Henshin-Setup-<semver>.exe`; l'updater refuse un manifeste sans checksum SHA256 valide et verifie le fichier telecharge avant execution.
+Le workflow recherche exactement `app/release/Henshin-Setup-2.0.26.exe`, calcule SHA256, produit le fichier `.sha256`, puis charge les deux assets dans la release. `/api/version` selectionne uniquement le motif `Henshin-Setup-<semver>.exe`; l'updater refuse un manifeste sans checksum SHA256 valide et verifie le fichier telecharge avant execution.
+
+Une build de test non signee doit etre lancee manuellement avec `allow_unsigned=true`. Elle est publiee comme prerelease et ne change pas l'exigence de signature des tags normaux.
 
 ## Installation et desinstallation
 
