@@ -18,6 +18,8 @@ Les rewrites conserves sont uniquement les alias API reellement geres par les fo
 
 Ajoutez les valeurs dans Vercel Settings > Environment Variables. Ne placez jamais une cle serveur dans une variable `VITE_*`.
 
+L'origine de production unique est `https://henshin.numzer0.store`: utilisez `VITE_API_BASE_URL=https://henshin.numzer0.store/api` et cette meme origine pour `APP_PUBLIC_URL` et `PAYMENT_RETURN_URL`.
+
 | Groupe | Variable | Portee | Requise |
 |---|---|---|---|
 | Navigateur | `VITE_API_BASE_URL` | Build + navigateur | Oui |
