@@ -28,12 +28,12 @@
     StrCmp $0 "0" henshin_uninstall_cleanup henshin_uninstall_failed
 
   henshin_uninstall_missing:
-    MessageBox MB_OK|MB_ICONSTOP "The Henshin camera registrar is missing. Camera deregistration cannot continue."
-    Abort
+    MessageBox MB_OK|MB_ICONEXCLAMATION "The Henshin camera registrar is missing. Uninstallation will continue with camera runtime cleanup."
+    Goto henshin_uninstall_cleanup
 
   henshin_uninstall_failed:
-    MessageBox MB_OK|MB_ICONSTOP "Henshin camera deregistration failed (exit code $0). Uninstallation has stopped so it can be retried."
-    Abort
+    MessageBox MB_OK|MB_ICONEXCLAMATION "Henshin camera deregistration failed (exit code $0). Uninstallation will continue; a restart may be required to finish camera cleanup."
+    Goto henshin_uninstall_cleanup
 
   henshin_uninstall_cleanup:
     ; Delete only directories exclusively owned by the camera runtime.
