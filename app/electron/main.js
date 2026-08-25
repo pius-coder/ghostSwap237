@@ -297,10 +297,40 @@ function parsePaymentUrl(value) {
   }
 }
 
+function parseAuthUrl(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 2048) return null;
+
+  try {
+    const authUrl = new URL(value);
+    const hostname = authUrl.hostname.toLowerCase();
+    if (
+      authUrl.protocol !== 'https:' ||
+      authUrl.username ||
+      authUrl.password ||
+      (authUrl.port && authUrl.port !== '443') ||
+      !/^[a-z0-9-]+\.supabase\.co$/.test(hostname) ||
+      authUrl.pathname !== '/auth/v1/authorize' ||
+      authUrl.searchParams.get('provider') !== 'google'
+    ) {
+      return null;
+    }
+    return authUrl;
+  } catch {
+    return null;
+  }
+}
+
 async function openPaymentLink(value) {
   const paymentUrl = parsePaymentUrl(value);
   if (!paymentUrl) throw new Error('Invalid Fapshi payment URL.');
   await shell.openExternal(paymentUrl.href);
+  return { opened: true };
+}
+
+async function openAuthLink(value) {
+  const authUrl = parseAuthUrl(value);
+  if (!authUrl) throw new Error('Invalid Google authentication URL.');
+  await shell.openExternal(authUrl.href);
   return { opened: true };
 }
 
@@ -475,6 +505,13 @@ ipcMain.handle('open-payment-link', (event, url) => {
     throw new Error('Payment links can only be opened by the main window.');
   }
   return openPaymentLink(url);
+});
+
+ipcMain.handle('open-auth-link', (event, url) => {
+  if (!mainWindow || event.sender.id !== mainWindow.webContents.id) {
+    throw new Error('Authentication links can only be opened by the main window.');
+  }
+  return openAuthLink(url);
 });
 
 // ---------------------------------------------------------------------------

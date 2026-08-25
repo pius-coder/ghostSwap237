@@ -28,6 +28,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => void;
   register: (email: string, name: string, password: string) => Promise<RegistrationResult>;
   loading: boolean;
@@ -296,13 +297,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (data.user) {
         // Email confirmation is required
         setError(null);
-        navigate(ROUTES.PUBLIC.LOGIN, { replace: true });
         return { requiresEmailConfirmation: true };
       }
 
       throw new Error('Registration succeeded without creating a user');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: buildAuthCallbackUrl(),
+          skipBrowserRedirect: true,
+        },
+      });
+      if (authError) throw authError;
+      if (!data.url) throw new Error('Google authentication returned no authorization URL');
+
+      const bridge = window as Window & {
+        require?: (id: string) => {
+          ipcRenderer?: { invoke: (channel: string, value: string) => Promise<unknown> };
+        };
+      };
+      const ipcRenderer = bridge.require?.('electron')?.ipcRenderer;
+      if (ipcRenderer) {
+        await ipcRenderer.invoke('open-auth-link', data.url);
+      } else {
+        window.location.assign(data.url);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Google authentication failed';
       setError(message);
       throw err;
     } finally {
@@ -329,6 +364,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       isAuthenticated: !!user,
       login,
+      loginWithGoogle,
       logout,
       register,
       loading,
