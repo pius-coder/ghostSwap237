@@ -6,7 +6,7 @@ on:
       tag:
         description: Release tag to build
         required: true
-        default: v2.0.26
+        default: v2.0.27
       allow_unsigned:
         description: Publish an unsigned test prerelease
         required: true
@@ -146,7 +146,7 @@ jobs:
 
             ${{ inputs.allow_unsigned && '> **Unsigned test build:** Windows SmartScreen may display a warning. Use this build for testing only.' || '' }}
 
-            Windows 11 x64, build 22000 or newer.
+            Windows 10 x64 and Windows 11 x64.
 
             **SHA256:** `${{ steps.artifact.outputs.sha256 }}`
         env:

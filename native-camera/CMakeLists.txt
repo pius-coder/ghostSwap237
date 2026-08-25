@@ -101,7 +101,7 @@ target_include_directories(henshin_cam_registrar PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_link_libraries(henshin_cam_registrar PRIVATE
-    mf mfuuid mfplat mfsensorgroup ole32 oleaut32 kernel32 advapi32 shlwapi shell32
+    mf mfuuid mfplat ole32 oleaut32 kernel32 advapi32 shlwapi shell32
 )
 set_target_properties(henshin_cam_registrar PROPERTIES
     WIN32_EXECUTABLE FALSE

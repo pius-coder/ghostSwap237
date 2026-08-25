@@ -65,6 +65,52 @@ static bool IsWindows11OrGreater() {
     return ovi.dwBuildNumber >= 22000;
 }
 
+using MFCreateVirtualCameraFn = HRESULT(STDAPICALLTYPE*)(
+    MFVirtualCameraType,
+    MFVirtualCameraLifetime,
+    MFVirtualCameraAccess,
+    LPCWSTR,
+    LPCWSTR,
+    const GUID*,
+    ULONG,
+    IMFVirtualCamera**);
+
+static MFCreateVirtualCameraFn ResolveMFCreateVirtualCamera() {
+    static const MFCreateVirtualCameraFn createVirtualCamera = []() {
+        HMODULE module = LoadLibraryExW(
+            L"mfsensorgroup.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+        return module
+            ? reinterpret_cast<MFCreateVirtualCameraFn>(
+                  GetProcAddress(module, "MFCreateVirtualCamera"))
+            : nullptr;
+    }();
+    return createVirtualCamera;
+}
+
+static HRESULT InvokeMFCreateVirtualCamera(
+    MFVirtualCameraType type,
+    MFVirtualCameraLifetime lifetime,
+    MFVirtualCameraAccess access,
+    LPCWSTR friendlyName,
+    LPCWSTR sourceId,
+    const GUID* categories,
+    ULONG categoryCount,
+    IMFVirtualCamera** virtualCamera) {
+    const auto createVirtualCamera = ResolveMFCreateVirtualCamera();
+    if (!createVirtualCamera) {
+        return HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
+    }
+    return createVirtualCamera(
+        type,
+        lifetime,
+        access,
+        friendlyName,
+        sourceId,
+        categories,
+        categoryCount,
+        virtualCamera);
+}
+
 // Returns the directory containing this executable
 static std::wstring ExeDir() {
     wchar_t path[MAX_PATH] = {};
@@ -591,7 +637,7 @@ static bool CreateAndStartVirtualCamera() {
     StringFromGUID2(CLSID_HenshinVirtualCameraMF, sourceId, 64);
 
     ComPtr<IMFVirtualCamera> cam;
-    HRESULT hr = MFCreateVirtualCamera(
+    HRESULT hr = InvokeMFCreateVirtualCamera(
         MFVirtualCameraType_SoftwareCameraSource,
         MFVirtualCameraLifetime_System,
         MFVirtualCameraAccess_AllUsers,
@@ -623,7 +669,7 @@ static void RemoveVirtualCameraByFriendlyName(const wchar_t* friendlyName) {
     wchar_t sourceId[64] = {};
     StringFromGUID2(CLSID_HenshinVirtualCameraMF, sourceId, 64);
     ComPtr<IMFVirtualCamera> cam;
-    if (SUCCEEDED(MFCreateVirtualCamera(
+    if (SUCCEEDED(InvokeMFCreateVirtualCamera(
             MFVirtualCameraType_SoftwareCameraSource,
             MFVirtualCameraLifetime_System,
             MFVirtualCameraAccess_AllUsers,
@@ -819,7 +865,7 @@ static int CmdProbe() {
         wchar_t sourceId[64] = {};
         StringFromGUID2(CLSID_HenshinVirtualCameraMF, sourceId, 64);
         ComPtr<IMFVirtualCamera> cam;
-        HRESULT hr = MFCreateVirtualCamera(
+        HRESULT hr = InvokeMFCreateVirtualCamera(
             MFVirtualCameraType_SoftwareCameraSource,
             MFVirtualCameraLifetime_System,
             MFVirtualCameraAccess_AllUsers,

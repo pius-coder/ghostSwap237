@@ -3,7 +3,7 @@
 ## Prerequis
 
 - Runner GitHub `windows-latest`, Bun `1.3.14`, Node.js 22 et `app/bun.lock` sont utilises par le workflow.
-- La cible officielle est uniquement **Windows 11 x64, build 22000 ou plus recent**.
+- Les cibles officielles sont **Windows 10 x64 et Windows 11 x64**.
 - Les quatre binaires camera sont compiles en Release avec le runtime MSVC statique `/MT`; Visual Studio et le redistribuable VC++ ne sont pas requis sur le PC cible.
 - `henshin_cam_mf_smoke.exe` reste un outil de diagnostic de build/QA et n'est pas livre.
 - Une signature Authenticode valide est obligatoire avant une diffusion publique. Un build interne non signe reste possible.
@@ -30,7 +30,7 @@ Le workflow signe d'abord les quatre binaires camera avec `signtool`, puis trans
 Depuis `app`, synchronisez package, API et updater sans toucher `bun.lock`:
 
 ```powershell
-bun run release:sync 2.0.26
+bun run release:sync 2.0.27
 bun install --frozen-lockfile
 ```
 
@@ -49,27 +49,27 @@ bun run release:preflight
 bun run electron-builder --win nsis --publish never
 ```
 
-Le preflight verifie les quatre binaires, la version `2.0.26`, `Henshin-Setup-${version}.${ext}`, les variables navigateur, puis lint et build. Il ne compile rien sur le PC client.
+Le preflight verifie les quatre binaires, la version `2.0.27`, `Henshin-Setup-${version}.${ext}`, les variables navigateur, puis lint et build. Il ne compile rien sur le PC client.
 
 ## Publier
 
 La version du tag est la source de verite du job; le workflow la resynchronise sans npm lock:
 
 ```powershell
-git tag v2.0.26
-git push origin v2.0.26
+git tag v2.0.27
+git push origin v2.0.27
 ```
 
-Le workflow recherche exactement `app/release/Henshin-Setup-2.0.26.exe`, calcule SHA256, produit le fichier `.sha256`, puis charge les deux assets dans la release. `/api/version` selectionne uniquement le motif `Henshin-Setup-<semver>.exe`; l'updater refuse un manifeste sans checksum SHA256 valide et verifie le fichier telecharge avant execution.
+Le workflow recherche exactement `app/release/Henshin-Setup-2.0.27.exe`, calcule SHA256, produit le fichier `.sha256`, puis charge les deux assets dans la release. `/api/version` selectionne uniquement le motif `Henshin-Setup-<semver>.exe`; l'updater refuse un manifeste sans checksum SHA256 valide et verifie le fichier telecharge avant execution.
 
 Une build de test non signee doit etre lancee manuellement avec `allow_unsigned=true`. Elle est publiee comme prerelease et ne change pas l'exigence de signature des tags normaux.
 
 ## Installation et desinstallation
 
-L'installateur est per-machine et demande les droits administrateur. Il bloque tout systeme dont le build est inferieur a 22000. Il n'existe aucun fallback per-user; un registrar absent ou en erreur fait echouer explicitement l'installation.
+L'installateur est per-machine et demande les droits administrateur. Sur Windows 11, le registrar active la camera Media Foundation; sur Windows 10, il charge uniquement le filtre DirectShow compatible. Il n'existe aucun fallback per-user; un registrar absent ou en erreur fait echouer explicitement l'installation.
 
 La desinstallation doit d'abord desinscrire la camera et COM. Elle supprime ensuite uniquement les repertoires camera possedes `ProgramData\HenshinCam` et `Public\Documents\HenshinCam`; une erreur de desinscription arrete la desinstallation afin de permettre une nouvelle tentative.
 
 ## Securite
 
-Ne committez ni `app/.env`, ni PFX, ni token. Si l'historique Git, une ancienne release ou des logs ont expose des secrets, faites tourner tous les anciens secrets concernes avant toute release publique. La validation finale doit etre faite sur une VM Windows 11 x64 propre, sans Visual Studio ni VC++ Redistributable installe.
+Ne committez ni `app/.env`, ni PFX, ni token. Si l'historique Git, une ancienne release ou des logs ont expose des secrets, faites tourner tous les anciens secrets concernes avant toute release publique. La validation finale doit etre faite sur des VM Windows 10 x64 et Windows 11 x64 propres, sans Visual Studio ni VC++ Redistributable installe.

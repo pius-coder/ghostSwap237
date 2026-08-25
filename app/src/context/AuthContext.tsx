@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '@/lib/routes';
-import { buildHashRouteUrl } from '@/lib/auth';
+import { buildAuthCallbackUrl } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -29,10 +29,14 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  register: (email: string, name: string, password: string) => Promise<void>;
+  register: (email: string, name: string, password: string) => Promise<RegistrationResult>;
   loading: boolean;
   error: string | null;
   clearError: () => void;
+}
+
+interface RegistrationResult {
+  requiresEmailConfirmation: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -268,7 +272,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: {
             name: name.trim(),
           },
-          emailRedirectTo: buildHashRouteUrl(ROUTES.PUBLIC.LOGIN),
+          emailRedirectTo: buildAuthCallbackUrl(),
         }
       });
 
@@ -288,11 +292,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         navigate(ROUTES.DEFAULT, { replace: true });
+        return { requiresEmailConfirmation: false };
       } else if (data.user) {
         // Email confirmation is required
         setError(null);
-        navigate(ROUTES.DEFAULT, { replace: true });
+        navigate(ROUTES.PUBLIC.LOGIN, { replace: true });
+        return { requiresEmailConfirmation: true };
       }
+
+      throw new Error('Registration succeeded without creating a user');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed';
       setError(message);

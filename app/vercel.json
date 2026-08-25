@@ -7,6 +7,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/auth-callback",
+      "destination": "/"
+    },
+    {
       "source": "/api/morphly-token",
       "destination": "/api/start-session?action=morphly-token"
     },

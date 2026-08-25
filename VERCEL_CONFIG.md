@@ -48,7 +48,7 @@ L'origine de production unique est `https://henshin.numzer0.store`: utilisez `VI
 
 En production, utilisez `FAPSHI_BASE_URL=https://live.fapshi.com` et `FAPSHI_APP_RETURN_URL=https://henshin.numzer0.store/api/payment/fapshi-return`. Dans le dashboard Fapshi, configurez `https://henshin.numzer0.store/api/payment/fapshi-webhook` et le meme secret que `FAPSHI_WEBHOOK_SECRET`. Le webhook recoit les POST serveur; le pont HTTPS ouvre ensuite `henshin://payment-success` pour revenir dans l'application.
 
-Dans Supabase Authentication > URL Configuration, remplacez le Site URL local par l'URL HTTPS publique Henshin et ajoutez `henshin://auth-callback` dans Redirect URLs. Les emails de confirmation ouvrent ainsi directement l'application, qui termine ensuite l'echange PKCE. Ne laissez aucune URL localhost comme destination de production.
+Dans Supabase Authentication > URL Configuration, utilisez `https://henshin.numzer0.store` comme Site URL et ajoutez `https://henshin.numzer0.store/auth-callback` ainsi que `henshin://auth-callback` dans Redirect URLs. Une inscription web revient au callback HTTPS; une inscription depuis Electron ouvre directement l'application. Les deux parcours terminent ensuite l'echange PKCE. Ne laissez aucune URL localhost comme destination de production.
 
 ## Preflight et deploiement
 

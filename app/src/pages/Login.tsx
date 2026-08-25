@@ -38,8 +38,12 @@ function Login() {
         await login(email, password);
         toast.success('Welcome back!');
       } else {
-        await register(email, name, password);
-        toast.success('Account created successfully!');
+        const result = await register(email, name, password);
+        toast.success(
+          result.requiresEmailConfirmation
+            ? 'Check your email to confirm your account.'
+            : 'Account created successfully!',
+        );
       }
     } catch {
       // Error is handled by the auth context and shown via toast
