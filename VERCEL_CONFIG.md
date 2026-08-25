@@ -44,7 +44,7 @@ Ajoutez les valeurs dans Vercel Settings > Environment Variables. Ne placez jama
 
 `MORPHLY_API_KEY` est requis cote serveur si Morphly est actif. `EXCHANGE_RATE_API_KEY` est optionnel selon le fournisseur de taux. Les fallbacks updater `DESKTOP_*` et Supabase Storage sont decrits dans `app/.env.example`; GitHub Releases reste la source primaire.
 
-En production, utilisez `FAPSHI_BASE_URL=https://live.fapshi.com` et `FAPSHI_APP_RETURN_URL=https://webhook-henshin.numzer0.store/api/payment/fapshi-return`. Dans le dashboard Fapshi, configurez `https://webhook-henshin.numzer0.store/api/payment/fapshi-webhook` et le meme secret que `FAPSHI_WEBHOOK_SECRET`. Le webhook recoit les POST serveur; le pont HTTPS ouvre ensuite `henshin://payment-success` pour revenir dans l'application.
+En production, utilisez `FAPSHI_BASE_URL=https://live.fapshi.com` et `FAPSHI_APP_RETURN_URL=https://henshin.numzer0.store/api/payment/fapshi-return`. Dans le dashboard Fapshi, configurez `https://henshin.numzer0.store/api/payment/fapshi-webhook` et le meme secret que `FAPSHI_WEBHOOK_SECRET`. Le webhook recoit les POST serveur; le pont HTTPS ouvre ensuite `henshin://payment-success` pour revenir dans l'application.
 
 Dans Supabase Authentication > URL Configuration, remplacez le Site URL local par l'URL HTTPS publique Henshin et ajoutez `henshin://auth-callback` dans Redirect URLs. Les emails de confirmation ouvrent ainsi directement l'application, qui termine ensuite l'echange PKCE. Ne laissez aucune URL localhost comme destination de production.
 

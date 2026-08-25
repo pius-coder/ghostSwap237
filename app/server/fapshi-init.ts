@@ -15,7 +15,7 @@ function paymentReturnUrl(paymentId, returnToApp) {
   if (returnToApp) {
     const bridge = new URL(
       process.env.FAPSHI_APP_RETURN_URL ||
-        'https://webhook-henshin.numzer0.store/api/payment/fapshi-return',
+        'https://henshin.numzer0.store/api/payment/fapshi-return',
     );
     if (bridge.protocol !== 'https:') {
       throw new Error('FAPSHI_APP_RETURN_URL must use HTTPS.');

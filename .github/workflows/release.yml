@@ -128,7 +128,7 @@ jobs:
             ${{ steps.artifact.outputs.installer }}
             ${{ steps.artifact.outputs.checksum }}
           body: |
-            ## Henshin ${{ github.ref_name }}
+            ## Henshin ${{ env.RELEASE_TAG }}
 
             Windows 11 x64, build 22000 or newer.
 
