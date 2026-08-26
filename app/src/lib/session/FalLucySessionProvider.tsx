@@ -162,7 +162,7 @@ export function FalLucySessionProvider({ children }: { children: ReactNode }) {
       connectionRef.current?.send({
         prompt: promptRef.current || null,
         reference_image_url: referenceDataUrlRef.current,
-        enable_prompt_expansion: true,
+        enable_prompt_expansion: false,
         ...extra,
       });
     };
@@ -267,7 +267,7 @@ export function FalLucySessionProvider({ children }: { children: ReactNode }) {
   const setPrompt = useCallback(async ({ prompt }: { prompt?: string }) => {
     requireReady();
     promptRef.current = prompt || '';
-    connectionRef.current?.send({ prompt: promptRef.current, enable_prompt_expansion: true });
+    connectionRef.current?.send({ prompt: promptRef.current, enable_prompt_expansion: false });
   }, [requireReady]);
 
   const setReferenceImage = useCallback(async ({ blob }: { blob?: Blob }) => {
@@ -278,7 +278,7 @@ export function FalLucySessionProvider({ children }: { children: ReactNode }) {
     connectionRef.current?.send({
       prompt: promptRef.current,
       reference_image_url: referenceDataUrlRef.current,
-      enable_prompt_expansion: true,
+      enable_prompt_expansion: false,
     });
   }, [requireReady]);
 
