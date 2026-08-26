@@ -32,7 +32,7 @@ async function usersById(ids) {
   if (unique.length === 0) return new Map();
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, email, name, is_admin, created_at')
+    .select('id, email, is_admin, created_at')
     .in('id', unique);
   if (error) throw error;
   return new Map((data || []).map((user) => [user.id, user]));
@@ -40,7 +40,7 @@ async function usersById(ids) {
 
 async function loadClients() {
   const [{ data: users, error: userError }, { data: wallets, error: walletError }, { data: licenses, error: licenseError }] = await Promise.all([
-    supabaseAdmin.from('users').select('id, email, name, is_admin, created_at').order('created_at', { ascending: false }).limit(1000),
+    supabaseAdmin.from('users').select('id, email, is_admin, created_at').order('created_at', { ascending: false }).limit(1000),
     supabaseAdmin.from('wallets').select('user_id, credits'),
     supabaseAdmin.from('pro_licenses').select('id, user_id, status, credits_per_second, code_last4, redeemed_at, revoked_at, created_at, updated_at'),
   ]);
