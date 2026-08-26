@@ -18,8 +18,12 @@ export async function toMod4(file: File | Blob, minimumSide = 4): Promise<Blob> 
     canvas.height = h;
     const ctx = canvas.getContext('2d');
     if (!ctx) return file;
+    // High-quality scaling
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    // Use JPEG 0.92 for smaller data URI but keep PNG fallback for transparency
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
     return blob ?? file;
   } catch {
     return file;

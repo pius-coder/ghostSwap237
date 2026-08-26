@@ -19,12 +19,19 @@ export function defaultMorphlyPrompt(): string {
   return MORPHLY_PERSONA_PROMPT;
 }
 
+export const PRO_QUALITY_SUFFIX =
+  ' Keep the same person from the reference image (same face and identity, face swap), with natural movements and expressions, high detail, sharp focus.';
+
 export function promptForProvider(prompt: string, kind: 'fast' | 'pro', name?: string): string {
   void name;
   const trimmed = prompt.trim();
   if (kind === 'pro') {
     if (!trimmed || trimmed.includes(PERSONA_CAPABILITY_PREFIX)) {
-      return defaultMorphlyPrompt();
+      return `${PERSONA_PRESERVATION_LINE}${PRO_QUALITY_SUFFIX}`;
+    }
+    // Force quality: ensure identity is preserved even if user prompt is short
+    if (!trimmed.includes('reference image')) {
+      return `${trimmed}${PRO_QUALITY_SUFFIX}`;
     }
     return trimmed;
   }
