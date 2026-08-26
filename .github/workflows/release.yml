@@ -6,7 +6,7 @@ on:
       tag:
         description: Release tag to build
         required: true
-        default: v2.0.27
+        default: v2.0.28
       allow_unsigned:
         description: Publish an unsigned test prerelease
         required: true

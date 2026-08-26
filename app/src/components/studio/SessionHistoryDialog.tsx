@@ -58,7 +58,11 @@ export function SessionHistoryDialog({
                       <div className="flex items-center gap-2">
                         <span className={`size-1.5 rounded-full ${statusTone(session.status)}`} />
                         <p className="text-sm font-semibold text-foreground">
-                          {session.provider === 'reactor' ? 'Reactor X2' : 'Morphly (Deprecated)'}
+                          {session.provider === 'reactor'
+                            ? 'Reactor X2'
+                            : session.provider === 'fal'
+                              ? 'fal.ai Lucy 2.5'
+                              : 'Morphly (Historical)'}
                         </p>
                         <span className="font-mono text-[10px] uppercase text-muted-foreground">
                           {session.status}

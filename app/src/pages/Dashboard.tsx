@@ -1,7 +1,6 @@
 ﻿// Studio workspace — fxswap37 layout integrated into Henshin:
 // persona panel (left) + Stage with draggable camera PiP + SessionBar.
-// Engines: Reactor X2 ("fast", default) and Morphly Lucy 2.5 ("pro",
-// deprecated). Credits/session billing stays Supabase-backed.
+// Engines: Reactor X2 (Fast) and fal.ai Lucy 2.5 (PRO).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X2Provider } from '@reactor-models/x2';
 import { toast } from 'sonner';
@@ -16,7 +15,7 @@ import type { Persona } from '@/lib/personas';
 import { startLiveSession } from '@/lib/session/applyPersona';
 import { JsSessionProvider } from '@/lib/session/sessionBridge';
 import { useSessionCommands } from '@/lib/session/sessionContext';
-import { MorphlySessionProvider } from '@/lib/session/MorphlySessionProvider';
+import { FalLucySessionProvider } from '@/lib/session/FalLucySessionProvider';
 import { useVirtualCameraCapture } from '@/services/useVirtualCameraCapture';
 import { useSourcePublisher } from '@/components/studio/useSourcePublisher';
 import { Stage } from '@/components/studio/Stage';
@@ -24,6 +23,8 @@ import { SessionBar } from '@/components/studio/SessionBar';
 import { PersonaPanel } from '@/components/studio/PersonaPanel';
 import { CameraPickerDialog } from '@/components/studio/CameraPickerDialog';
 import { SessionHistoryDialog } from '@/components/studio/SessionHistoryDialog';
+import { ProAccessDialog } from '@/components/ProAccessDialog';
+import { useProAccess } from '@/hooks/useProAccess';
 import { TextureButton } from '@/components/ui/texture-button';
 
 const CREDITS_PER_SECOND = 2;
@@ -57,35 +58,74 @@ async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [liveProvider, setLiveProvider] = useState<LiveProvider>(() => loadLiveProvider());
+  const [proDialogOpen, setProDialogOpen] = useState(false);
+  const { access: proAccess, loading: proAccessLoading, redeem: redeemProLicense } = useProAccess(user?.id);
+
+  const authorizedLiveProvider = liveProvider === 'pro' && !proAccess.active
+    ? 'fast'
+    : liveProvider;
+
+  useEffect(() => {
+    if (authorizedLiveProvider === 'fast' && liveProvider === 'pro' && !proAccessLoading) {
+      saveLiveProvider('fast');
+    }
+  }, [authorizedLiveProvider, liveProvider, proAccessLoading]);
 
   const onLiveProviderChange = useCallback((next: LiveProvider) => {
+    if (next === 'pro' && !proAccess.active) {
+      setProDialogOpen(true);
+      return;
+    }
     saveLiveProvider(next);
     setLiveProvider(next);
-  }, []);
+  }, [proAccess.active]);
 
-  if (liveProvider === 'pro') {
-    return (
-      <MorphlySessionProvider>
-        <Workspace liveProvider={liveProvider} onLiveProviderChange={onLiveProviderChange} />
-      </MorphlySessionProvider>
-    );
-  }
-
-  return (
+  const workspace = authorizedLiveProvider === 'pro' ? (
+    <FalLucySessionProvider>
+      <Workspace
+        liveProvider={authorizedLiveProvider}
+        proCreditsPerSecond={proAccess.creditsPerSecond}
+        onLiveProviderChange={onLiveProviderChange}
+      />
+    </FalLucySessionProvider>
+  ) : (
     <X2Provider apiUrl={REACTOR_API_URL} getJwt={fetchReactorToken} connectOptions={{ autoConnect: false }}>
       <JsSessionProvider>
-        <Workspace liveProvider={liveProvider} onLiveProviderChange={onLiveProviderChange} />
+        <Workspace
+          liveProvider={authorizedLiveProvider}
+          proCreditsPerSecond={proAccess.creditsPerSecond}
+          onLiveProviderChange={onLiveProviderChange}
+        />
       </JsSessionProvider>
     </X2Provider>
+  );
+
+  return (
+    <>
+      {workspace}
+      <ProAccessDialog
+        open={proDialogOpen}
+        access={proAccess}
+        onOpenChange={setProDialogOpen}
+        onRedeem={async (code) => {
+          await redeemProLicense(code);
+          saveLiveProvider('pro');
+          setLiveProvider('pro');
+        }}
+      />
+    </>
   );
 }
 
 function Workspace({
   liveProvider,
+  proCreditsPerSecond,
   onLiveProviderChange,
 }: {
   liveProvider: LiveProvider;
+  proCreditsPerSecond: number | null;
   onLiveProviderChange: (next: LiveProvider) => void;
 }) {
   const { user } = useAuth();
@@ -103,6 +143,7 @@ function Workspace({
   const [cameraPickerOpen, setCameraPickerOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [currentUsage, setCurrentUsage] = useState({ seconds: 0, credits: 0 });
+  const [sessionRate, setSessionRate] = useState(liveProvider === 'fast' ? 2 : proCreditsPerSecond || 80);
 
   const [sourceStream, setSourceStream] = useState<MediaStream | null>(null);
   const [sourceTrack, setSourceTrack] = useState<MediaStreamTrack | null>(null);
@@ -158,11 +199,13 @@ function Workspace({
     try {
       const response = await apiRequest<{
         credits?: number;
+        creditsPerSecond?: number;
         secondsUsed: number;
         creditsUsed?: number;
         remainingCredits?: number;
         shouldStop: boolean;
         forceEnd?: boolean;
+        reason?: string;
       }>(`/session-status?userId=${encodeURIComponent(user.id)}&sessionId=${encodeURIComponent(billingSessionId)}`);
       setCurrentUsage({
         seconds: Number(response.secondsUsed || 0),
@@ -179,8 +222,9 @@ function Workspace({
       }
 
       if (response.shouldStop || response.forceEnd) {
-        await handleStop(false, 'credits_exhausted');
-        toast.error('Session auto-ended - Insufficient credits');
+        const reason = response.reason || (response.forceEnd ? 'access_revoked' : 'credits_or_limit_reached');
+        await handleStop(false, reason);
+        toast.error(response.forceEnd ? 'Session ended because PRO access is inactive.' : 'Session ended because credits or the session limit were reached.');
       }
     } catch (error) {
       console.error('Poll error:', error);
@@ -255,11 +299,12 @@ function Workspace({
         sessionId: string | null;
         error?: string;
         credits?: number;
+        creditsPerSecond?: number;
       }>('/start-session', {
         method: 'POST',
         body: JSON.stringify({
           userId: user.id,
-          provider: liveProvider === 'fast' ? 'reactor' : 'morphly',
+          provider: liveProvider === 'fast' ? 'reactor' : 'fal',
           clientSessionId,
         }),
       });
@@ -269,13 +314,14 @@ function Workspace({
       }
       openedSessionId = sessionResponse.sessionId;
       billingSessionRef.current = openedSessionId;
+      if (typeof sessionResponse.creditsPerSecond === 'number') setSessionRate(sessionResponse.creditsPerSecond);
       setCurrentUsage({ seconds: 0, credits: 0 });
 
-      if (Number.isFinite(sessionResponse.credits)) {
+      if (typeof sessionResponse.credits === 'number') {
         setCredits(sessionResponse.credits);
       }
 
-      await startLiveSession(session, () => statusRef.current, activePersona, sourceStream);
+      await startLiveSession(session, () => statusRef.current, activePersona, sourceStream, openedSessionId);
 
       if (liveProvider === 'fast') {
         await waitForGeneration(() => metadataRef.current.generating);
@@ -441,7 +487,8 @@ function Workspace({
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const remainingSeconds = Math.max(0, Math.floor(credits / CREDITS_PER_SECOND));
+  const selectedRate = liveProvider === 'fast' ? CREDITS_PER_SECOND : proCreditsPerSecond || sessionRate;
+  const remainingSeconds = Math.max(0, Math.floor(credits / selectedRate));
   const remainingLabel = remainingSeconds > 0
     ? `~${Math.floor(remainingSeconds / 60)}m ${remainingSeconds % 60}s left`
     : 'No credits';

@@ -15,7 +15,7 @@ export interface Transaction {
 
 export interface SessionHistoryEntry {
   id: string;
-  provider: 'reactor' | 'morphly' | null;
+  provider: 'reactor' | 'fal' | 'morphly' | null;
   providerSessionId: string | null;
   date: string;
   duration: number;

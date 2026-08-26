@@ -33,7 +33,7 @@ function Placeholder({ provider }: { provider: LiveProvider }) {
     provider === 'pro'
       ? status === 'disconnected'
         ? { title: 'Ready', subtitle: 'Pick a persona, then press Start' }
-        : { title: 'Connecting…', subtitle: 'Opening Morphly Pro (deprecated)' }
+        : { title: 'Connecting…', subtitle: 'Opening fal.ai Lucy 2.5 PRO' }
       : (PLACEHOLDER_COPY[status] ?? PLACEHOLDER_COPY.ready);
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 px-6 text-center transition-opacity duration-500">
@@ -99,7 +99,7 @@ export function Stage({
     }
   }, [sourceStream, webcamVideoRef, onTrack]);
 
-  // Bind the Morphly remote stream to the visible Pro video element.
+  // Bind the Lucy remote stream to the visible PRO video element.
   useEffect(() => {
     if (liveProvider !== 'pro') return;
     const host = outputHostRef.current;

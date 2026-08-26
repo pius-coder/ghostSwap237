@@ -1,8 +1,11 @@
 import express from 'express';
 
 import resolveUser from '../api/auth/resolve-user.ts';
+import admin from '../api/admin.ts';
 import activateSession from '../api/activate-session.ts';
 import endSession from '../api/end-session.ts';
+import falRealtimeToken from '../api/fal-realtime-token.ts';
+import proLicense from '../api/pro-license.ts';
 import rate from '../api/rate.ts';
 import sessionStatus from '../api/session-status.ts';
 import startSession from '../api/start-session.ts';
@@ -13,7 +16,6 @@ import fapshiInit from '../server/fapshi-init.ts';
 import fapshiReturn from '../server/fapshi-return.ts';
 import fapshiStatus from '../server/fapshi-status.ts';
 import fapshiWebhook from '../server/fapshi-webhook.ts';
-import morphlyToken from '../server/morphly-token.ts';
 import reactorToken from '../api/reactor-token.ts';
 
 const app = express();
@@ -28,9 +30,11 @@ function mount(path, handler) {
 }
 
 mount('/api/auth/resolve-user', resolveUser);
+mount('/api/admin', admin);
 mount('/api/activate-session', activateSession);
 mount('/api/end-session', endSession);
-mount('/api/morphly-token', morphlyToken);
+mount('/api/fal-realtime-token', falRealtimeToken);
+mount('/api/pro-license', proLicense);
 mount('/api/reactor-token', reactorToken);
 mount('/api/payment/fapshi-init', fapshiInit);
 mount('/api/payment/fapshi-return', fapshiReturn);

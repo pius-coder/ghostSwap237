@@ -47,6 +47,7 @@ export default async function handler(req, res) {
     return res.json({
       credits: wallet.credits,
       remainingSeconds: Math.floor(wallet.credits / 2),
+      fastRemainingSeconds: Math.floor(wallet.credits / 2),
       transactions: (transactionsResult.data || []).map((transaction) => ({
         id: transaction.id,
         type: transaction.type,

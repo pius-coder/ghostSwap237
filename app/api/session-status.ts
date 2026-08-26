@@ -23,12 +23,32 @@ export default async function handler(req, res) {
     const wallet = await getWalletByUserId(userId, { createIfMissing: true });
     const { data: session, error: lookupError } = await supabaseAdmin
       .from('sessions')
-      .select('id, status, billable_started_at, credits_per_second, seconds_used, credits_used')
+      .select('id, provider, pro_license_id, status, billable_started_at, credits_per_second, seconds_used, credits_used')
       .eq('id', sessionId)
       .eq('user_id', userId)
       .maybeSingle();
     if (lookupError) throw lookupError;
     if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    if (session.provider === 'fal') {
+      const { data: license, error: licenseError } = await supabaseAdmin
+        .from('pro_licenses')
+        .select('status')
+        .eq('id', session.pro_license_id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (licenseError) throw licenseError;
+      if (license?.status !== 'active') {
+        return res.json({
+          secondsUsed: Number(session.seconds_used || 0),
+          creditsUsed: Number(session.credits_used || 0),
+          remainingCredits: wallet.credits,
+          shouldStop: true,
+          forceEnd: true,
+          reason: 'pro_license_inactive',
+        });
+      }
+    }
 
     if (session.status !== 'active') {
       return res.json({
@@ -71,6 +91,7 @@ export default async function handler(req, res) {
       secondsUsed,
       creditsUsed,
       remainingCredits,
+      creditsPerSecond: rate,
       shouldStop: accruedCredits >= wallet.credits || secondsUsed >= MAX_SESSION_SECONDS,
     });
   } catch (error) {

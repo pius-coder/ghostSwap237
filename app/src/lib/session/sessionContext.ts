@@ -8,6 +8,7 @@ export interface SessionConnectOptions {
   stream?: MediaStream | null;
   prompt?: string;
   image?: Blob;
+  billingSessionId?: string;
 }
 
 export interface SessionMetadata {

@@ -1,15 +1,15 @@
 // Engine selection for live sessions.
 //   "fast" — Reactor X2 (prioritized, default)
-//   "pro"  — Morphly Lucy 2.5 (deprecated, kept working)
+//   "pro"  — fal.ai Lucy 2.5 (license-gated)
 export type LiveProvider = 'fast' | 'pro';
 
-// v2 deliberately ignores the old preference: strict Pro deprecation must not
-// silently boot returning users into Morphly. Explicit v2 choices still persist.
-const KEY = 'henshin.liveProvider.v2';
+// v3 ignores legacy Morphly preferences so users cannot boot into PRO before
+// the current account-bound entitlement has been checked.
+const KEY = 'henshin.liveProvider.v3';
 
 export const LIVE_PROVIDER_OPTIONS: { value: LiveProvider; label: string; hint: string }[] = [
   { value: 'fast', label: 'Fast', hint: 'Reactor X2' },
-  { value: 'pro', label: 'Pro', hint: 'Morphly · deprecated' },
+  { value: 'pro', label: 'PRO', hint: 'fal.ai Lucy 2.5' },
 ];
 
 export const DEFAULT_LIVE_PROVIDER: LiveProvider = 'fast';

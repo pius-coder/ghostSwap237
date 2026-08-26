@@ -62,7 +62,7 @@ bool HenshinPublisher::CreateFileBridge() {
         GENERIC_READ | GENERIC_WRITE,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         &sa,
-        CREATE_ALWAYS,
+        OPEN_ALWAYS,
         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS,
         nullptr);
 
@@ -70,13 +70,17 @@ bool HenshinPublisher::CreateFileBridge() {
 
     if (m_hFile == INVALID_HANDLE_VALUE) return false;
 
-    // Pre-size the file to sizeof(header) + payload
-    LARGE_INTEGER li;
-    li.QuadPart = static_cast<LONGLONG>(m_totalSize);
-    if (!SetFilePointerEx(m_hFile, li, nullptr, FILE_BEGIN) || !SetEndOfFile(m_hFile)) {
-        CloseHandle(m_hFile);
-        m_hFile = INVALID_HANDLE_VALUE;
-        return false;
+    LARGE_INTEGER currentSize = {};
+    if (!GetFileSizeEx(m_hFile, &currentSize) ||
+        currentSize.QuadPart != static_cast<LONGLONG>(m_totalSize)) {
+        LARGE_INTEGER desiredSize;
+        desiredSize.QuadPart = static_cast<LONGLONG>(m_totalSize);
+        if (!SetFilePointerEx(m_hFile, desiredSize, nullptr, FILE_BEGIN) ||
+            !SetEndOfFile(m_hFile)) {
+            CloseHandle(m_hFile);
+            m_hFile = INVALID_HANDLE_VALUE;
+            return false;
+        }
     }
 
     // Apply permissive DACL to the file mapping

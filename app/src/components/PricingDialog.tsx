@@ -14,6 +14,8 @@ import { CosmicButton } from '@/components/ui/cosmic-button';
 import { TextureCard } from '@/components/ui/texture-card';
 import { TextureButton } from '@/components/ui/texture-button';
 import { PricingDialogContext } from '@/hooks/usePricingDialog';
+import { useProAccess } from '@/hooks/useProAccess';
+import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 export interface CreditPackage {
@@ -30,8 +32,8 @@ function formatPrice(plan: CreditPackage): string {
   return 'Contact us';
 }
 
-function formatDuration(credits: number): string {
-  const seconds = Math.floor(credits / 2);
+function formatDuration(credits: number, rate = 2): string {
+  const seconds = Math.floor(credits / rate);
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -44,6 +46,8 @@ function formatDuration(credits: number): string {
 
 export function PricingDialogProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const { user } = useAuth();
+  const { access: proAccess } = useProAccess(user?.id);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [dismissedQueryKey, setDismissedQueryKey] = useState<string | null>(null);
   const [plans, setPlans] = useState<CreditPackage[]>([]);
@@ -187,8 +191,14 @@ export function PricingDialogProvider({ children }: { children: ReactNode }) {
                           </li>
                           <li className="flex gap-2.5">
                             <Check className="mt-0.5 size-[18px] shrink-0 text-primary" />
-                            <span>About {formatDuration(plan.credits)} of live session</span>
+                            <span>About {formatDuration(plan.credits)} in Fast mode</span>
                           </li>
+                          {proAccess.active && proAccess.creditsPerSecond && (
+                            <li className="flex gap-2.5">
+                              <Check className="mt-0.5 size-[18px] shrink-0 text-primary" />
+                              <span>About {formatDuration(plan.credits, proAccess.creditsPerSecond)} in PRO mode</span>
+                            </li>
+                          )}
                           <li className="flex gap-2.5">
                             <Check className="mt-0.5 size-[18px] shrink-0 text-primary" />
                             <span>No expiration or hidden fee</span>
@@ -222,8 +232,7 @@ export function PricingDialogProvider({ children }: { children: ReactNode }) {
             )}
 
             <p className="mt-7 text-center text-xs text-muted-foreground">
-              2 Henshin credits are deducted per second. Reactor X2 rate verified at 17 provider
-              credits/s ($6.12/hour).
+              Fast costs 2 Henshin credits per second. PRO uses the server-authoritative rate assigned to the license.
             </p>
           </div>
         </DialogContent>

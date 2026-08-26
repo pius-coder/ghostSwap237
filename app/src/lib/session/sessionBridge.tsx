@@ -1,6 +1,6 @@
 // Session bridge — one command interface for every live engine.
 //   kind "fast" → Reactor X2 (JsSessionProvider, wraps @reactor-models/x2)
-//   kind "pro"  → Morphly Lucy 2.5 (MorphlySessionProvider)
+//   kind "pro"  → fal.ai Lucy 2.5 (FalLucySessionProvider)
 // Adapted from the fxswap37 reference; the native/Tauri paths were dropped —
 // Henshin is Electron-only.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';

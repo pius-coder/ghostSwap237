@@ -1,6 +1,5 @@
 // SessionBar — transport controls under the Stage (fxswap37 pattern,
-// Henshin dark+blue tokens). Fast = Reactor X2 (default), Pro = Morphly
-// (deprecated). Ghost Mode + OBS preview are Henshin-native.
+// Henshin dark+blue tokens). Fast = Reactor X2, PRO = fal.ai Lucy 2.5.
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeftRight, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Video, X } from 'lucide-react';
 import { TextureCard } from '@/components/ui/texture-card';
@@ -175,7 +174,7 @@ export function SessionBar({
             </span>
           )}
 
-          {/* Engine switch — Pro is deprecated; Fast (Reactor) is default. */}
+          {/* Engine switch. PRO access is enforced before this callback changes provider. */}
           <TextureButton
             variant="minimal"
             size="sm"
@@ -186,14 +185,14 @@ export function SessionBar({
               idle
                 ? liveProvider === 'pro'
                   ? 'Swap to Fast (Reactor X2)'
-                  : 'Swap to Pro (Morphly — deprecated)'
+                  : 'Switch to PRO (fal.ai Lucy 2.5)'
                 : 'Stop the session before swapping'
             }
             contentClassName="gap-1.5 px-2 text-xs tracking-tight"
           >
             <ArrowLeftRight className="size-3 text-muted-foreground" />
             <span className={liveProvider === 'fast' ? 'text-blue-300' : 'text-foreground'}>
-              {liveProvider === 'fast' ? 'Fast · X2' : 'Pro · Legacy'}
+              {liveProvider === 'fast' ? 'Fast · X2' : 'PRO · Lucy 2.5'}
             </span>
           </TextureButton>
 

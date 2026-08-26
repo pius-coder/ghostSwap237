@@ -7,15 +7,20 @@ import { TextureButton } from '@/components/ui/texture-button';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { usePricingDialog } from '@/hooks/usePricingDialog';
+import { useProAccess } from '@/hooks/useProAccess';
 
 const CREDITS_PER_SECOND = 2;
 
 function Wallet() {
   const { credits, transactions } = useApp();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { openPricing } = usePricingDialog();
+  const { access: proAccess } = useProAccess(user?.id);
 
   const remainingSeconds = Math.floor(credits / CREDITS_PER_SECOND);
+  const proRemainingSeconds = proAccess.active && proAccess.creditsPerSecond
+    ? Math.floor(credits / proAccess.creditsPerSecond)
+    : null;
 
   return (
     <div className="max-w-[800px]">
@@ -41,9 +46,14 @@ function Wallet() {
           <p className="mb-6 text-4xl font-semibold text-foreground">
             <AnimatedNumber value={Math.round(credits)} /> <span className="text-xl text-muted-foreground">Credits</span>
           </p>
-          <p className="mb-6 text-sm text-muted-foreground">
-            Estimated remaining stream time: {Math.floor(remainingSeconds / 60)}m {remainingSeconds % 60}s
-          </p>
+          <div className="mb-6 space-y-1 text-sm text-muted-foreground">
+            <p>Fast at 2 cr/s: {Math.floor(remainingSeconds / 60)}m {remainingSeconds % 60}s remaining</p>
+            {proRemainingSeconds !== null && (
+              <p>
+                PRO at {proAccess.creditsPerSecond} cr/s: {Math.floor(proRemainingSeconds / 60)}m {proRemainingSeconds % 60}s remaining
+              </p>
+            )}
+          </div>
           <CosmicButton
             as="button"
             onClick={openPricing}

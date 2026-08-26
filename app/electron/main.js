@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import fs from 'fs';
+import os from 'os';
 import { spawn, execFile } from 'child_process';
 import { registerUpdaterIpc, scheduleBackgroundUpdateCheck } from './updater.js';
 
@@ -13,6 +14,7 @@ import { registerUpdaterIpc, scheduleBackgroundUpdateCheck } from './updater.js'
 // ---------------------------------------------------------------------------
 let vcamPublisher         = null;
 let vcamPublisherReady    = false;
+let vcamPublisherWritable = true;
 const PIPE_FRAME_MAGIC    = 0x484E5348; // "HNSH"
 const PIPE_PROTOCOL_VER   = 1;
 const VCAM_FRAME_WIDTH    = 1280;
@@ -20,6 +22,10 @@ const VCAM_FRAME_HEIGHT   = 720;
 const VCAM_FPS            = 30;
 const VCAM_FRAME_STRIDE   = VCAM_FRAME_WIDTH * 4;
 const VCAM_FRAME_BYTES    = VCAM_FRAME_STRIDE * VCAM_FRAME_HEIGHT;
+const WINDOWS_BUILD       = process.platform === 'win32'
+  ? Number.parseInt(os.release().split('.')[2] || '0', 10)
+  : 0;
+const USE_AKVCAM_BACKEND  = process.platform === 'win32' && WINDOWS_BUILD < 22000;
 
 function makeSolidRgbaFrame(r = 0, g = 0, b = 0, a = 255) {
   const frame = Buffer.alloc(VCAM_FRAME_BYTES);
@@ -77,10 +83,18 @@ function getPublisherPath() {
   return path.join(getNativeBinDir(), 'henshin_cam_pipe_publisher.exe');
 }
 
+function getAkVCamManagerPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'akvirtualcamera', 'x64', 'AkVCamManager.exe');
+  }
+  const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  return path.join(appDir, 'vendor', 'akvirtualcamera', 'x64', 'AkVCamManager.exe');
+}
+
 // Run the registrar probe; if unhealthy, run install.
 // Only attempts repair in the packaged app (installer already ran elevated).
 function ensureVCamRegistration() {
-  if (!app.isPackaged) return; // dev build — skip
+  if (!app.isPackaged || USE_AKVCAM_BACKEND) return; // dev/Windows 10 — skip
   const registrar = getRegistrarPath();
   if (!fs.existsSync(registrar)) return;
 
@@ -99,7 +113,7 @@ function ensureVCamRegistration() {
 
 // Spawn the frame-publisher child process.
 function startVCamPublisher() {
-  const publisherPath = getPublisherPath();
+  const publisherPath = USE_AKVCAM_BACKEND ? getAkVCamManagerPath() : getPublisherPath();
   if (!fs.existsSync(publisherPath)) {
     console.error('[vcam-publisher] executable not found at', publisherPath);
     return;
@@ -107,7 +121,10 @@ function startVCamPublisher() {
 
   if (vcamPublisher) return; // already running
 
-  vcamPublisher = spawn(publisherPath, [], {
+  const publisherArgs = USE_AKVCAM_BACKEND
+    ? ['stream', 'HenshinCamera', 'BGRA', String(VCAM_FRAME_WIDTH), String(VCAM_FRAME_HEIGHT), '-f', String(VCAM_FPS)]
+    : [];
+  vcamPublisher = spawn(publisherPath, publisherArgs, {
     stdio: ['pipe', 'ignore', 'pipe'],
     windowsHide: true,
   });
@@ -119,6 +136,7 @@ function startVCamPublisher() {
     console.warn('[vcam-publisher] exited with code', code);
     vcamPublisher      = null;
     vcamPublisherReady = false;
+    vcamPublisherWritable = true;
     // Auto-restart after 2 s if the app is still running
     setTimeout(() => { if (!app.isQuitting) startVCamPublisher(); }, 2000);
   });
@@ -129,8 +147,13 @@ function startVCamPublisher() {
       vcamPublisher.kill();
     }
   });
+  vcamPublisher.stdin.on('drain', () => {
+    vcamPublisherWritable = true;
+  });
 
   vcamPublisherReady = true;
+  vcamPublisherWritable = true;
+  console.log(`[vcam-publisher] using ${USE_AKVCAM_BACKEND ? 'akvirtualcamera DirectShow' : 'Henshin Media Foundation'} backend`);
 }
 
 function stopVCamPublisher() {
@@ -139,6 +162,7 @@ function stopVCamPublisher() {
     vcamPublisher.kill();
     vcamPublisher      = null;
     vcamPublisherReady = false;
+    vcamPublisherWritable = true;
   }
 }
 
@@ -146,7 +170,7 @@ function stopVCamPublisher() {
 // The renderer sends RGBA (browser-native); we swap R↔B here so the DLL
 // receives BGRA as it expects.
 function writeFrameToPublisher(rgbaBuffer, width, height) {
-  if (!vcamPublisher || !vcamPublisherReady) return;
+  if (!vcamPublisher || !vcamPublisherReady || !vcamPublisherWritable) return;
 
   const stride       = VCAM_FRAME_STRIDE;
   const payloadBytes = VCAM_FRAME_BYTES;
@@ -175,8 +199,9 @@ function writeFrameToPublisher(rgbaBuffer, width, height) {
   header.writeBigInt64LE(timestampHns,   32);
 
   try {
-    vcamPublisher.stdin.write(header);
-    vcamPublisher.stdin.write(bgra);
+    vcamPublisherWritable = USE_AKVCAM_BACKEND
+      ? vcamPublisher.stdin.write(bgra)
+      : vcamPublisher.stdin.write(Buffer.concat([header, bgra]));
   } catch (e) {
     // Ignore EPIPE here — the 'error' handler on stdin will trigger restart
   }
