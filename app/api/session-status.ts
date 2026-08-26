@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     const wallet = await getWalletByUserId(userId, { createIfMissing: true });
     const { data: session, error: lookupError } = await supabaseAdmin
       .from('sessions')
-      .select('id, provider, pro_license_id, status, billable_started_at, credits_per_second, seconds_used, credits_used')
+      .select('id, provider, pro_license_id, status, end_reason, billable_started_at, credits_per_second, seconds_used, credits_used')
       .eq('id', sessionId)
       .eq('user_id', userId)
       .maybeSingle();
@@ -56,6 +56,7 @@ export default async function handler(req, res) {
         creditsUsed: Number(session.credits_used || 0),
         remainingCredits: wallet.credits,
         shouldStop: true,
+        reason: session.end_reason || 'ended',
       });
     }
 
@@ -87,12 +88,15 @@ export default async function handler(req, res) {
     const creditsUsed = Math.min(wallet.credits, accruedCredits);
     const remainingCredits = Math.max(0, wallet.credits - creditsUsed);
 
+    const shouldStopCredits = accruedCredits >= wallet.credits;
+    const shouldStopTime = secondsUsed >= MAX_SESSION_SECONDS;
     return res.json({
       secondsUsed,
       creditsUsed,
       remainingCredits,
       creditsPerSecond: rate,
-      shouldStop: accruedCredits >= wallet.credits || secondsUsed >= MAX_SESSION_SECONDS,
+      shouldStop: shouldStopCredits || shouldStopTime,
+      reason: shouldStopCredits ? 'credits_exhausted' : shouldStopTime ? 'time_limit_reached' : undefined,
     });
   } catch (error) {
     return sendApiError(res, error, 'Failed to fetch session status');

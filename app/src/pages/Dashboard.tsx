@@ -222,7 +222,14 @@ function Workspace({
       }
 
       if (response.shouldStop || response.forceEnd) {
+        // Ignore polling after we already disconnected locally (prevents false error toast on manual stop)
+        if (statusRef.current === 'disconnected') return;
         const reason = response.reason || (response.forceEnd ? 'access_revoked' : 'credits_or_limit_reached');
+        // Normal terminations (user_stop, camera_stopped, etc.) should not show the credits error
+        if (['user_stop', 'camera_stopped', 'ended', 'start_failed', 'reconciled_on_start', 'window_closed'].includes(reason)) {
+          await handleStop(false, reason);
+          return;
+        }
         await handleStop(false, reason);
         toast.error(response.forceEnd ? 'Session ended because PRO access is inactive.' : 'Session ended because credits or the session limit were reached.');
       }
