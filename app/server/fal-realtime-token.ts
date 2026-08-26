@@ -66,15 +66,22 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         Authorization: `Key ${falKey}`,
       },
-      body: JSON.stringify({ allowed_apps: [FAL_LUCY_APP], duration: TOKEN_DURATION_SECONDS }),
+      body: JSON.stringify({ app: FAL_LUCY_APP, duration: TOKEN_DURATION_SECONDS }),
     });
-    const body = await upstream.json().catch(() => ({}));
-    if (!upstream.ok || !body?.token) {
-      console.error('fal.ai realtime token failed:', upstream.status, body?.detail || body?.error);
+    const raw = await upstream.text();
+    let token = null;
+    try {
+      const parsed = JSON.parse(raw);
+      token = typeof parsed === 'string' ? parsed : parsed.token || parsed.detail || null;
+    } catch {
+      token = raw || null;
+    }
+    if (!upstream.ok || !token) {
+      console.error('fal.ai realtime token failed:', upstream.status, raw.slice(0, 500));
       return res.status(502).json({ error: 'Could not create fal.ai realtime token' });
     }
 
-    return res.json({ token: body.token, expiresIn: TOKEN_DURATION_SECONDS });
+    return res.json({ token, expiresIn: TOKEN_DURATION_SECONDS });
   } catch (error) {
     return sendApiError(res, error, 'Failed to authorize fal.ai realtime access');
   }
