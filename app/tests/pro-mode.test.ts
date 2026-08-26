@@ -58,8 +58,10 @@ describe('database security contract', () => {
     expect(proSql).toContain('COALESCE(v_session.billable_started_at, clock_timestamp())');
     expect(proSql).toContain('reconcile_stale_billed_sessions');
     const cronApi = await Bun.file(join(import.meta.dir, '../api/reconcile-sessions.ts')).text();
+    const vercelConfig = await Bun.file(join(import.meta.dir, '../vercel.json')).json();
     expect(cronApi).toContain('Bearer ${cronSecret}');
     expect(cronApi).toContain('p_stale_after_seconds: 15');
+    expect(vercelConfig.crons).toEqual([{ path: '/api/reconcile-sessions', schedule: '0 3 * * *' }]);
   });
 
   test('makes audit immutable and admin mutations service-role only', async () => {
