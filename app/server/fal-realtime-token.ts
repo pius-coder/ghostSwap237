@@ -1,7 +1,7 @@
 // @ts-nocheck
-import { requireAuthorizedUser, sendApiError } from './auth.js';
+import { requireAuthorizedUser, sendApiError } from '../api/auth.js';
 import { getWalletByUserId } from './credit-utils.js';
-import { supabaseAdmin } from './supabase.js';
+import { supabaseAdmin } from '../api/supabase.js';
 import { FAL_LUCY_APP, getProLicenseByUserId, PRO_CONTACT_PHONE } from './pro-utils.js';
 
 const TOKEN_DURATION_SECONDS = 120;

@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { requireAuthorizedUser, sendApiError } from './auth.js';
-import { supabaseAdmin } from './supabase.js';
+import { requireAuthorizedUser, sendApiError } from '../api/auth.js';
+import { supabaseAdmin } from '../api/supabase.js';
 import {
   getProLicenseByUserId,
   hashLicenseCode,

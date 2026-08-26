@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { requireAuthorizedUser, sendApiError } from './auth.js';
-import { getWalletByUserId } from './credit-utils.js';
+import { getWalletByUserId } from '../server/credit-utils.js';
 import { supabaseAdmin } from './supabase.js';
-import { getProLicenseByUserId, PRO_CONTACT_PHONE, resolveSessionCreditsPerSecond } from './pro-utils.js';
+import { getProLicenseByUserId, PRO_CONTACT_PHONE, resolveSessionCreditsPerSecond } from '../server/pro-utils.js';
 
 const PROVIDERS = new Set(['reactor', 'fal']);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

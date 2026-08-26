@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { requireAdminUser, sendApiError } from './auth.js';
-import { supabaseAdmin } from './supabase.js';
+import { requireAdminUser, sendApiError } from '../api/auth.js';
+import { supabaseAdmin } from '../api/supabase.js';
 import {
   DEFAULT_PRO_CREDITS_PER_SECOND,
   generateLicenseCode,

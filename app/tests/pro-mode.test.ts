@@ -1,14 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
+import { readdir } from 'node:fs/promises';
 import { isSameAccountIdentity } from '../api/auth';
-import { isAuthorizedFalRealtimeApp } from '../api/fal-realtime-token';
+import { isAuthorizedFalRealtimeApp } from '../server/fal-realtime-token';
 import {
   generateLicenseCode,
   hashLicenseCode,
   normalizeLicenseCode,
   publicLicenseStatus,
   resolveSessionCreditsPerSecond,
-} from '../api/pro-utils';
+} from '../server/pro-utils';
 
 describe('PRO authorization', () => {
   test('accepts only the authenticated account or its matching email identity', () => {
@@ -49,6 +50,12 @@ describe('PRO licenses and rates', () => {
 });
 
 describe('database security contract', () => {
+  test('stays within the Vercel Hobby serverless function limit', async () => {
+    const apiFiles = await readdir(join(import.meta.dir, '../api'), { recursive: true });
+    const functions = apiFiles.filter((name) => /\.(?:ts|js)$/.test(String(name)));
+    expect(functions).toHaveLength(12);
+  });
+
   test('keeps billing idempotent and starts it only after usable provider output', async () => {
     const baseSql = await Bun.file(join(import.meta.dir, '../../supabase/20260824_billed_session_history.sql')).text();
     const proSql = await Bun.file(join(import.meta.dir, '../../supabase/20260826_pro_mode_fal.sql')).text();
@@ -57,7 +64,7 @@ describe('database security contract', () => {
     expect(proSql).toContain("'provider_output_usable_at', v_started_at");
     expect(proSql).toContain('COALESCE(v_session.billable_started_at, clock_timestamp())');
     expect(proSql).toContain('reconcile_stale_billed_sessions');
-    const cronApi = await Bun.file(join(import.meta.dir, '../api/reconcile-sessions.ts')).text();
+    const cronApi = await Bun.file(join(import.meta.dir, '../server/reconcile-sessions.ts')).text();
     const vercelConfig = await Bun.file(join(import.meta.dir, '../vercel.json')).json();
     expect(cronApi).toContain('Bearer ${cronSecret}');
     expect(cronApi).toContain('p_stale_after_seconds: 15');
@@ -66,7 +73,7 @@ describe('database security contract', () => {
 
   test('makes audit immutable and admin mutations service-role only', async () => {
     const sql = await Bun.file(join(import.meta.dir, '../../supabase/20260826_pro_mode_fal.sql')).text();
-    const adminApi = await Bun.file(join(import.meta.dir, '../api/admin.ts')).text();
+    const adminApi = await Bun.file(join(import.meta.dir, '../server/admin.ts')).text();
     expect(sql).toContain('BEFORE UPDATE OR DELETE ON public.admin_audit_log');
     expect(sql).toContain('REVOKE ALL ON FUNCTION public.admin_decide_payment');
     expect(sql).toContain('TO service_role');

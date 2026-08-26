@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { requireAuthorizedUser, sendApiError } from './auth.js';
-import { getWalletByUserId } from './credit-utils.js';
+import { getWalletByUserId } from '../server/credit-utils.js';
 import { supabaseAdmin } from './supabase.js';
 import fapshiInitHandler from '../server/fapshi-init.js';
 import fapshiReturnHandler from '../server/fapshi-return.js';

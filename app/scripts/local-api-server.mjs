@@ -1,11 +1,11 @@
 import express from 'express';
 
 import resolveUser from '../api/auth/resolve-user.ts';
-import admin from '../api/admin.ts';
+import admin from '../server/admin.ts';
 import activateSession from '../api/activate-session.ts';
 import endSession from '../api/end-session.ts';
-import falRealtimeToken from '../api/fal-realtime-token.ts';
-import proLicense from '../api/pro-license.ts';
+import falRealtimeToken from '../server/fal-realtime-token.ts';
+import proLicense from '../server/pro-license.ts';
 import rate from '../api/rate.ts';
 import sessionStatus from '../api/session-status.ts';
 import startSession from '../api/start-session.ts';

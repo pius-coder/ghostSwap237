@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { createHash, randomBytes } from 'node:crypto';
-import { supabaseAdmin } from './supabase.js';
+import { supabaseAdmin } from '../api/supabase.js';
 
 export const FAL_LUCY_APP = 'decart/lucy-2-5/realtime';
 export const DEFAULT_PRO_CREDITS_PER_SECOND = 80;
