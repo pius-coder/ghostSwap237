@@ -5,14 +5,32 @@
   "installCommand": "bun install --frozen-lockfile",
   "buildCommand": "bun run vercel:build",
   "outputDirectory": "dist",
+  "crons": [
+    {
+      "path": "/api/reconcile-sessions",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/api/admin",
+      "destination": "/api/pro?route=admin"
+    },
+    {
+      "source": "/api/fal-realtime-token",
+      "destination": "/api/pro?route=fal-realtime-token"
+    },
+    {
+      "source": "/api/pro-license",
+      "destination": "/api/pro?route=pro-license"
+    },
+    {
+      "source": "/api/reconcile-sessions",
+      "destination": "/api/pro?route=reconcile-sessions"
+    },
     {
       "source": "/auth-callback",
       "destination": "/"
-    },
-    {
-      "source": "/api/morphly-token",
-      "destination": "/api/start-session?action=morphly-token"
     },
     {
       "source": "/api/payment/fapshi-init",

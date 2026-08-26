@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
 
-export const CURRENT_VERSION = '2.0.27';
+export const CURRENT_VERSION = '2.0.28';
 
 const DEFAULT_VERSION_ENDPOINT = 'https://henshin.vercel.app/api/version';
 const DEFAULT_DOWNLOAD_URL = '';

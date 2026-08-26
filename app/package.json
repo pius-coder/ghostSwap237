@@ -1,7 +1,7 @@
 {
     "name": "henshin",
     "private": true,
-    "version": "2.0.27",
+    "version": "2.0.28",
     "type": "module",
     "main": "electron/main.js",
     "build": {
@@ -22,6 +22,15 @@
         "files": [
             "dist/**/*",
             "electron/**/*"
+        ],
+        "extraResources": [
+            {
+                "from": "vendor/akvirtualcamera",
+                "to": "akvirtualcamera",
+                "filter": [
+                    "**/*"
+                ]
+            }
         ],
         "afterPack": "build/afterPack.cjs",
         "win": {
@@ -45,6 +54,7 @@
         "dev:web": "vite",
         "dev:all": "concurrently -n api,web -c blue,green \"bun run dev:api\" \"bun run dev:web\"",
         "build": "cross-env NODE_OPTIONS=--max-old-space-size=2048 vite build",
+        "test": "bun test",
         "vercel:build": "bun run scripts/vercel-preflight.mjs && bun run build",
         "lint": "eslint .",
         "preview": "vite preview",
@@ -55,6 +65,7 @@
         "release:preflight": "bun run scripts/release-preflight.mjs"
     },
     "dependencies": {
+        "@fal-ai/client": "^1.10.1",
         "@fontsource-variable/geist": "^5.3.0",
         "@hookform/resolvers": "^5.2.2",
         "@radix-ui/react-accordion": "^1.2.12",

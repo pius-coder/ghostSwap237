@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { requireAuthorizedUser, sendApiError } from './auth.js';
-import { getWalletByUserId } from './credit-utils.js';
+import { getWalletByUserId } from '../server/credit-utils.js';
 import { supabaseAdmin } from './supabase.js';
 import fapshiInitHandler from '../server/fapshi-init.js';
 import fapshiReturnHandler from '../server/fapshi-return.js';
@@ -47,6 +47,7 @@ export default async function handler(req, res) {
     return res.json({
       credits: wallet.credits,
       remainingSeconds: Math.floor(wallet.credits / 2),
+      fastRemainingSeconds: Math.floor(wallet.credits / 2),
       transactions: (transactionsResult.data || []).map((transaction) => ({
         id: transaction.id,
         type: transaction.type,

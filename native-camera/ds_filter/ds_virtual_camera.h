@@ -7,6 +7,9 @@
 #define NOMINMAX
 #include <windows.h>
 #include <dshow.h>
+#include <ks.h>
+#include <ksmedia.h>
+#include <ksproxy.h>
 #include <atomic>
 #include <thread>
 #include <cstdint>
@@ -20,7 +23,11 @@
 // ============================================================================
 class CHenshinDSFilter;
 
-class CHenshinOutputPin : public IPin, public IQualityControl
+class CHenshinOutputPin
+    : public IPin
+    , public IQualityControl
+    , public IAMStreamConfig
+    , public IKsPropertySet
 {
 public:
     explicit CHenshinOutputPin(CHenshinDSFilter* pFilter);
@@ -53,6 +60,23 @@ public:
     STDMETHOD(Notify)(IBaseFilter* pSelf, Quality q) override { return S_OK; }
     STDMETHOD(SetSink)(IQualityControl* piqc) override { return S_OK; }
 
+    // IAMStreamConfig
+    STDMETHOD(SetFormat)(AM_MEDIA_TYPE* pmt) override;
+    STDMETHOD(GetFormat)(AM_MEDIA_TYPE** ppmt) override;
+    STDMETHOD(GetNumberOfCapabilities)(int* piCount, int* piSize) override;
+    STDMETHOD(GetStreamCaps)(int iIndex, AM_MEDIA_TYPE** ppmt, BYTE* pSCC) override;
+
+    // IKsPropertySet
+    STDMETHOD(Set)(REFGUID guidPropSet, DWORD dwID,
+                   LPVOID pInstanceData, DWORD cbInstanceData,
+                   LPVOID pPropData, DWORD cbPropData) override;
+    STDMETHOD(Get)(REFGUID guidPropSet, DWORD dwPropID,
+                   LPVOID pInstanceData, DWORD cbInstanceData,
+                   LPVOID pPropData, DWORD cbPropData,
+                   DWORD* pcbReturned) override;
+    STDMETHOD(QuerySupported)(REFGUID guidPropSet, DWORD dwPropID,
+                              DWORD* pTypeSupport) override;
+
     // Called by filter
     HRESULT Active();
     HRESULT Inactive();
@@ -63,8 +87,8 @@ private:
                             uint8_t* yuy2);
     bool FillMediaType(AM_MEDIA_TYPE* pmt) const;
     HRESULT TryOpenBridge();
+    void CloseBridge();
 
-    std::atomic<ULONG> m_ref{1};
     CHenshinDSFilter* m_pFilter = nullptr;
     IPin*               m_pConnected = nullptr;  // downstream pin
     IMemInputPin*       m_pMemInput  = nullptr;
@@ -72,6 +96,7 @@ private:
 
     std::thread       m_thread;
     std::atomic<bool> m_running{false};
+    std::atomic<bool> m_resetTimeline{true};
 
     // File bridge
     HANDLE   m_hFile  = INVALID_HANDLE_VALUE;

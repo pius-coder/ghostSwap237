@@ -9,10 +9,10 @@ async function blobFromImageUrl(url: string): Promise<Blob> {
   return response.blob();
 }
 
-export async function preparePersonaImage(persona: Persona): Promise<Blob> {
+export async function preparePersonaImage(persona: Persona, minimumSide = 4): Promise<Blob> {
   if (!persona.imageUrl) throw new Error('This persona has no image yet.');
   const blob = await blobFromImageUrl(persona.imageUrl);
-  return toMod4(new File([blob], `${persona.name}.jpg`, { type: blob.type || 'image/jpeg' }));
+  return toMod4(new File([blob], `${persona.name}.jpg`, { type: blob.type || 'image/jpeg' }), minimumSide);
 }
 
 export async function waitForSessionReady(
@@ -53,7 +53,7 @@ export async function applyPersonaToSession(
   if (!ready()) throw new Error('Start a session before applying a persona.');
   if (!persona.imageUrl) throw new Error('This persona has no image yet.');
 
-  const prepared = preparedImage ?? (await preparePersonaImage(persona));
+  const prepared = preparedImage ?? (await preparePersonaImage(persona, session.kind === 'pro' ? 512 : 4));
   const prompt = promptForProvider(persona.prompt, session.kind, persona.name);
 
   if (session.kind === 'pro') {
@@ -95,6 +95,7 @@ export async function startLiveSession(
   getStatus: (() => SessionStatus) | undefined,
   persona: Persona,
   sourceStream: MediaStream | null,
+  billingSessionId?: string,
 ): Promise<void> {
   if (!sourceStream?.getVideoTracks().some((track) => track.readyState === 'live')) {
     throw new Error('A live camera stream is required.');
@@ -103,12 +104,12 @@ export async function startLiveSession(
 
   const status = getStatus ?? (() => session.status);
   const prompt = promptForProvider(persona.prompt, session.kind, persona.name);
-  const prepared = await preparePersonaImage(persona);
+  const prepared = await preparePersonaImage(persona, session.kind === 'pro' ? 512 : 4);
 
   if (session.kind === 'pro') {
     await waitForSessionReady(
       status,
-      () => session.connect({ stream: sourceStream, prompt, image: prepared }),
+      () => session.connect({ stream: sourceStream, prompt, image: prepared, billingSessionId }),
       70_000,
     );
     return;
@@ -124,6 +125,10 @@ export async function restartLiveSession(
   persona: Persona,
   sourceStream: MediaStream | null,
 ): Promise<void> {
+  if (session.kind === 'pro' && (getStatus ? getStatus() : session.status) === 'ready') {
+    await applyPersonaToSession(session, persona, getStatus);
+    return;
+  }
   await stopLiveSession(session, getStatus);
   await startLiveSession(session, getStatus, persona, sourceStream);
 }

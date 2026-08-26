@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { supabaseAdmin } from './supabase.js';
+import { supabaseAdmin } from '../api/supabase.js';
 
 function buildError(message, cause) {
   const error = new Error(message);

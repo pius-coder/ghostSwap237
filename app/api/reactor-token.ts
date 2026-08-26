@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { authorizedUserIds, requireAuthUser, sendApiError } from './auth.js';
-import { getWalletByUserId } from './credit-utils.js';
+import { getWalletByUserId } from '../server/credit-utils.js';
 import { supabaseAdmin } from './supabase.js';
 
 const REACTOR_API_URL = process.env.REACTOR_API_URL || 'https://api.reactor.inc';
