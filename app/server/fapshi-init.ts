@@ -1,10 +1,10 @@
 // @ts-nocheck
 // POST /api/payment/fapshi-init
-// Creates a pending payment row and returns the Fapshi checkout link.
-// The wallet is only credited later by an admin (admin_confirm_payment).
 import { supabaseAdmin, supabaseAdminConfigError } from '../api/supabase.js';
 import { requireAuthorizedUser, sendApiError } from '../api/auth.js';
 import { fapshiConfigError, fapshiRequest } from './fapshi-client.js';
+import { attachProviderReference, createPaymentOrder } from './payment-orders.js';
+import { loadProviderProduct } from './payment-catalog.js';
 
 function appPublicUrl() {
   const raw = process.env.PAYMENT_RETURN_URL || process.env.APP_PUBLIC_URL || 'http://localhost:5173';
@@ -26,7 +26,7 @@ function paymentReturnUrl(paymentId, returnToApp) {
 
   const base = appPublicUrl();
   const separator = base.includes('#') ? (base.includes('?') ? '&' : '?') : '/#/payment-success?';
-  return `${base}${separator}ref=${encodeURIComponent(paymentId)}`;
+  return `${base}${separator}ref=${encodeURIComponent(paymentId)}&provider=fapshi`;
 }
 
 export default async function handler(req, res) {
@@ -35,9 +35,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const adminError = supabaseAdminConfigError || fapshiConfigError();
   if (!supabaseAdmin || adminError) {
@@ -47,50 +45,35 @@ export default async function handler(req, res) {
   const packageId = String(req.body?.packageId || '').trim();
   const requestedUserId = String(req.body?.userId || '').trim();
   const returnToApp = req.body?.returnToApp === true;
-
-  if (!packageId) {
-    return res.status(400).json({ error: 'A credit package is required.' });
-  }
+  if (!packageId) return res.status(400).json({ error: 'A credit package is required.' });
 
   try {
     const { authUser, userId: billingUserId } = await requireAuthorizedUser(req, requestedUserId);
-
-    const { data: creditPackage, error: packageError } = await supabaseAdmin
-      .from('credit_packages')
-      .select('id, credits, price_xaf')
-      .eq('id', packageId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (packageError || !creditPackage) {
-      return res.status(400).json({ error: 'The selected credit package is unavailable.' });
+    const mapping = await loadProviderProduct(packageId, 'fapshi', 'XAF');
+    if (!mapping || mapping.enabled !== true || mapping.credit_packages?.is_active !== true) {
+      return res.status(400).json({ error: 'This package is unavailable for Mobile Money payment.' });
     }
 
-    const amountXaf = Math.round(Number(creditPackage.price_xaf || 0));
-    const credits = Number(creditPackage.credits);
+    const amountXaf = Math.round(Number(mapping.amount));
+    const credits = Number(mapping.credit_packages.credits);
     if (!Number.isFinite(amountXaf) || amountXaf < 100 || !Number.isFinite(credits) || credits <= 0) {
       return res.status(500).json({ error: 'The selected package has invalid pricing.' });
     }
 
-    const { data: payment, error: insertError } = await supabaseAdmin
-      .from('crypto_payments')
-      .insert({
-        user_id: billingUserId,
-        package_id: creditPackage.id,
-        amount: amountXaf,
-        currency: 'XAF',
-        credits,
-        crypto_currency: 'FAPSHI',
-        status: 'pending',
-        provider_status: 'CREATED',
-      })
-      .select('id')
-      .single();
-
-    if (insertError) {
-      console.error('[fapshi-init] Insert failed:', insertError);
-      return res.status(500).json({ error: 'Could not start the payment.' });
-    }
+    const payment = await createPaymentOrder({
+      userId: billingUserId,
+      packageId: mapping.package_id,
+      providerProductId: mapping.id,
+      provider: 'fapshi',
+      grossAmount: amountXaf,
+      currency: 'XAF',
+      credits,
+      metadata: {
+        returnToApp,
+        package_name: mapping.credit_packages.name,
+        purpose: 'wallet_credits',
+      },
+    });
 
     let initiated;
     try {
@@ -106,7 +89,11 @@ export default async function handler(req, res) {
         },
       });
     } catch (initError) {
-      await supabaseAdmin.from('crypto_payments').delete().eq('id', payment.id);
+      await supabaseAdmin.from('payment_orders').update({
+        status: 'failed',
+        failure_reason: 'Fapshi initiation failed',
+        updated_at: new Date().toISOString(),
+      }).eq('id', payment.id);
       console.error('[fapshi-init] Initiate failed:', initError);
       return res.status(502).json({
         error: initError?.message || 'Could not create the checkout. Please try again.',
@@ -115,24 +102,23 @@ export default async function handler(req, res) {
 
     const transId = String(initiated?.transId || '').trim();
     if (!transId || !initiated?.link) {
-      await supabaseAdmin.from('crypto_payments').delete().eq('id', payment.id);
+      await supabaseAdmin.from('payment_orders').update({
+        status: 'failed',
+        failure_reason: 'Invalid Fapshi response',
+        updated_at: new Date().toISOString(),
+      }).eq('id', payment.id);
       return res.status(502).json({ error: 'The payment gateway returned an invalid response.' });
     }
 
-    const { error: referenceError } = await supabaseAdmin
-      .from('crypto_payments')
-      .update({ reference: transId })
-      .eq('id', payment.id);
-
-    if (referenceError) {
+    try {
+      await attachProviderReference(payment.id, transId);
+    } catch (referenceError) {
       console.error('[fapshi-init] Could not store transaction reference:', referenceError);
-      const { error: cleanupError } = await supabaseAdmin
-        .from('crypto_payments')
-        .delete()
-        .eq('id', payment.id);
-      if (cleanupError) {
-        console.error('[fapshi-init] Could not clean up payment after reference failure:', cleanupError);
-      }
+      await supabaseAdmin.from('payment_orders').update({
+        fulfilment_status: 'failed',
+        failure_reason: 'Could not persist Fapshi reference',
+        updated_at: new Date().toISOString(),
+      }).eq('id', payment.id);
       return res.status(500).json({
         error: 'Could not save the payment reference. Please start a new payment.',
       });
@@ -142,6 +128,9 @@ export default async function handler(req, res) {
       paymentId: payment.id,
       transId,
       link: initiated.link,
+      amount: amountXaf,
+      currency: 'XAF',
+      credits,
     });
   } catch (error) {
     return sendApiError(res, error, 'Could not start the payment.');

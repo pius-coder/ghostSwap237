@@ -17,17 +17,48 @@ import fapshiReturn from '../server/fapshi-return.ts';
 import fapshiStatus from '../server/fapshi-status.ts';
 import fapshiWebhook from '../server/fapshi-webhook.ts';
 import reactorToken from '../api/reactor-token.ts';
+import chariowInit from '../server/chariow-init.ts';
+import chariowPulse from '../server/chariow-pulse.ts';
 
 const app = express();
 const port = Number(process.env.HENSHIN_LOCAL_API_PORT || 3001);
-
-app.use(express.json({ limit: '15mb' }));
 
 function mount(path, handler) {
   app.all(path, (req, res, next) => {
     Promise.resolve(handler(req, res)).catch(next);
   });
 }
+
+// Chariow Pulse MUST see the exact raw body before express.json().
+app.post(
+  '/api/payment/chariow-pulse',
+  express.raw({ type: 'application/json', limit: '1mb' }),
+  (req, res, next) => {
+    req.rawBody = req.body;
+    try {
+      req.body = JSON.parse(Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body || '{}'));
+    } catch {
+      req.body = {};
+    }
+    Promise.resolve(chariowPulse(req, res)).catch(next);
+  },
+);
+// Also expose the dedicated Vercel-style path locally.
+app.post(
+  '/api/chariow-pulse',
+  express.raw({ type: 'application/json', limit: '1mb' }),
+  (req, res, next) => {
+    req.rawBody = req.body;
+    try {
+      req.body = JSON.parse(Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body || '{}'));
+    } catch {
+      req.body = {};
+    }
+    Promise.resolve(chariowPulse(req, res)).catch(next);
+  },
+);
+
+app.use(express.json({ limit: '15mb' }));
 
 mount('/api/auth/resolve-user', resolveUser);
 mount('/api/admin', admin);
@@ -40,6 +71,7 @@ mount('/api/payment/fapshi-init', fapshiInit);
 mount('/api/payment/fapshi-return', fapshiReturn);
 mount('/api/payment/fapshi-status', fapshiStatus);
 mount('/api/payment/fapshi-webhook', fapshiWebhook);
+mount('/api/payment/chariow-init', chariowInit);
 mount('/api/rate', rate);
 mount('/api/session-status', sessionStatus);
 mount('/api/start-session', startSession);

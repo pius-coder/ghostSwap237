@@ -47,6 +47,18 @@
     {
       "source": "/api/payment/fapshi-webhook",
       "destination": "/api/wallet?action=fapshi-webhook"
+    },
+    {
+      "source": "/api/payment/chariow-init",
+      "destination": "/api/wallet?action=chariow-init"
+    },
+    {
+      "source": "/api/payment/chariow-pulse",
+      "destination": "/api/wallet?action=chariow-pulse"
+    },
+    {
+      "source": "/api/payment/payment-status",
+      "destination": "/api/wallet?action=payment-status"
     }
   ]
 }
