@@ -1,0 +1,4 @@
+LIBRARY henshin-vcam
+EXPORTS
+  DllGetClassObject PRIVATE
+  DllCanUnloadNow   PRIVATE

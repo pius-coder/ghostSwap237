@@ -1,5 +1,5 @@
 // afterPack.cjs — electron-builder afterPack hook
-// Copies the 4 required runtime camera binaries from the CMake Release output
+// Copies the 3 required Windows 11 camera binaries from the MSVC outputs
 // into resources/henshin-cam/ inside the packaged app.
 // This runs AFTER electron-builder packages the app but BEFORE the installer
 // is created, so the binaries are bundled into the final installer.
@@ -10,24 +10,20 @@ const fs   = require('fs');
 const path = require('path');
 
 const BINARIES = [
-  'henshin_cam_registrar.exe',
-  'henshin_cam_pipe_publisher.exe',
-  'HenshinVirtualCameraMF.dll',
-  'HenshinVirtualCamera.dll',
+  ['registrar/build/Release/henshin-vcam-register.exe', 'henshin-vcam-register.exe'],
+  ['publisher/build/Release/henshin-vcam-publisher.exe', 'henshin-vcam-publisher.exe'],
+  ['driver/build/Release/henshin-vcam.dll', 'henshin-vcam.dll'],
 ];
-
-// henshin_cam_mf_smoke.exe is intentionally not shipped: it is a build/QA
-// diagnostic, not an application runtime dependency.
 
 exports.default = async function afterPack(context) {
   const { appOutDir } = context;
 
-  // Source: native-camera/build/Release (cmake output)
+  // Source: native-camera-v2 component Release outputs.
   const repoRoot = path.resolve(__dirname, '..', '..');
   const configuredBinDir = String(process.env.HENSHIN_NATIVE_BIN_DIR || '').trim();
   const srcDir = configuredBinDir
     ? path.resolve(repoRoot, configuredBinDir)
-    : path.join(repoRoot, 'native-camera', 'build', 'Release');
+    : path.join(repoRoot, 'native-camera-v2');
 
   // Destination: <packaged-app>/resources/henshin-cam/
   const dstDir = path.join(appOutDir, 'resources', 'henshin-cam');
@@ -35,23 +31,22 @@ exports.default = async function afterPack(context) {
   if (!fs.existsSync(srcDir)) {
     throw new Error(
       `[afterPack] Native binaries source dir not found: ${srcDir}\n` +
-      `  Run: cmake -S native-camera -B native-camera/build -A x64\n` +
-      `       cmake --build native-camera/build --config Release`
+      `  Run: bun run camera:build`
     );
   }
 
   fs.mkdirSync(dstDir, { recursive: true });
 
   const missing = [];
-  for (const bin of BINARIES) {
-    const src = path.join(srcDir, bin);
-    const dst = path.join(dstDir, bin);
+  for (const [relativeSource, outputName] of BINARIES) {
+    const src = path.join(srcDir, relativeSource);
+    const dst = path.join(dstDir, outputName);
     if (!fs.existsSync(src)) {
       missing.push(src);
       continue;
     }
     fs.copyFileSync(src, dst);
-    console.log(`[afterPack] Bundled: ${bin}`);
+    console.log(`[afterPack] Bundled: ${outputName}`);
   }
 
   if (missing.length > 0) {

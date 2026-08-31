@@ -3,8 +3,8 @@
 // Electron main process which writes them to the Henshin pipe publisher.
 //
 // Frame pipeline:
-//   Canvas (RGBA) → R↔B swap in main.js → PipeFrameHeader → publisher stdin
-//   → file bridge → HenshinVirtualCameraMF.dll → FrameServer → apps
+//   Canvas RGBA → publisher stdin → BT.709 NV12 multi-slot bridge
+//   → Henshin IMFMediaSourceEx → Windows FrameServer → apps
 
 declare global {
   interface Window {
@@ -38,6 +38,8 @@ export class VirtualCameraService {
   private _lastReportAt = 0;
   private _notReadyCount = 0;
   private _drawFailureCount = 0;
+  private _publisherPaused = false;
+  private _pauseHandler: ((_event: Electron.IpcRendererEvent, paused: boolean) => void) | null = null;
 
   // Width / height of the virtual camera output (must match kDefaultWidth/Height in C++)
   static readonly WIDTH  = 1280;
@@ -71,6 +73,8 @@ export class VirtualCameraService {
       this._lastFrameAt = 0;
       this._notReadyCount = 0;
       this._drawFailureCount = 0;
+      this._pauseHandler = (_event, paused) => { this._publisherPaused = Boolean(paused); };
+      ipc.on('vcam-paused', this._pauseHandler);
 
       this._scheduleFrame(video, ipc);
     } else {
@@ -104,6 +108,10 @@ export class VirtualCameraService {
     this._canvas = null;
     this._ctx    = null;
     this._video = null;
+    const ipc = getIpc();
+    if (ipc && this._pauseHandler) ipc.removeListener('vcam-paused', this._pauseHandler);
+    this._pauseHandler = null;
+    this._publisherPaused = false;
   }
 
   // ---------------------------------------------------------------------------
@@ -127,7 +135,7 @@ export class VirtualCameraService {
   // _captureAndSend — draw one frame to OffscreenCanvas and ship it
   // ---------------------------------------------------------------------------
   private _captureAndSend(video: HTMLVideoElement, ipc: Electron.IpcRenderer) {
-    if (!this._ctx || !this._canvas) return;
+    if (!this._ctx || !this._canvas || this._publisherPaused) return;
 
     const videoReady =
       video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
@@ -189,7 +197,7 @@ export class VirtualCameraService {
       );
 
       // imageData.data is Uint8ClampedArray (RGBA).
-      // Main process does the R↔B swap, so we send as-is.
+      // Publisher consumes browser-native RGBA and converts to NV12.
       ipc.send('sendVirtualCameraFrame', {
         buffer: imageData.data,                // Uint8ClampedArray → Buffer in main
         width:  VirtualCameraService.WIDTH,

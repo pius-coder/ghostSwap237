@@ -10,10 +10,9 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(appDir, 'package.json')
 const expectedArtifact = 'Henshin-Setup-${version}.${ext}';
 const requiredBrowserEnv = ['VITE_API_BASE_URL', 'VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'];
 const requiredBinaries = [
-  'henshin_cam_registrar.exe',
-  'henshin_cam_pipe_publisher.exe',
-  'HenshinVirtualCameraMF.dll',
-  'HenshinVirtualCamera.dll',
+  'registrar/build/Release/henshin-vcam-register.exe',
+  'publisher/build/Release/henshin-vcam-publisher.exe',
+  'driver/build/Release/henshin-vcam.dll',
 ];
 
 const errors = [];
@@ -37,7 +36,7 @@ for (const [relativePath, pattern] of [
 const configuredBinDir = String(process.env.HENSHIN_NATIVE_BIN_DIR || '').trim();
 const nativeBinDir = configuredBinDir
   ? path.resolve(repoDir, configuredBinDir)
-  : path.join(repoDir, 'native-camera', 'build', 'Release');
+  : path.join(repoDir, 'native-camera-v2');
 for (const binary of requiredBinaries) {
   const binaryPath = path.join(nativeBinDir, binary);
   if (!fs.existsSync(binaryPath) || !fs.statSync(binaryPath).isFile()) errors.push(`missing native binary: ${binaryPath}`);

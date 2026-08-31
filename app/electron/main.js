@@ -5,7 +5,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import fs from 'fs';
-import os from 'os';
 import { spawn, execFile } from 'child_process';
 import { registerUpdaterIpc, scheduleBackgroundUpdateCheck } from './updater.js';
 
@@ -15,6 +14,11 @@ import { registerUpdaterIpc, scheduleBackgroundUpdateCheck } from './updater.js'
 let vcamPublisher         = null;
 let vcamPublisherReady    = false;
 let vcamPublisherWritable = true;
+let vcamPublisherGeneration = null;
+let vcamPublisherLastError = null;
+let vcamPublisherHeartbeatAt = null;
+let vcamPublisherRestartBlocked = false;
+let vcamPublisherStderr = '';
 const PIPE_FRAME_MAGIC    = 0x484E5348; // "HNSH"
 const PIPE_PROTOCOL_VER   = 1;
 const VCAM_FRAME_WIDTH    = 1280;
@@ -22,10 +26,6 @@ const VCAM_FRAME_HEIGHT   = 720;
 const VCAM_FPS            = 30;
 const VCAM_FRAME_STRIDE   = VCAM_FRAME_WIDTH * 4;
 const VCAM_FRAME_BYTES    = VCAM_FRAME_STRIDE * VCAM_FRAME_HEIGHT;
-const WINDOWS_BUILD       = process.platform === 'win32'
-  ? Number.parseInt(os.release().split('.')[2] || '0', 10)
-  : 0;
-const USE_AKVCAM_BACKEND  = process.platform === 'win32' && WINDOWS_BUILD < 22000;
 
 function makeSolidRgbaFrame(r = 0, g = 0, b = 0, a = 255) {
   const frame = Buffer.alloc(VCAM_FRAME_BYTES);
@@ -43,7 +43,7 @@ const SOLID_GREEN_RGBA = makeSolidRgbaFrame(0, 255, 0, 255);
 
 function normalizeRendererFrame(rgbaBuffer, width, height) {
   if (width !== VCAM_FRAME_WIDTH || height !== VCAM_FRAME_HEIGHT) {
-    return Buffer.from(SOLID_BLACK_RGBA);
+    return null;
   }
 
   if (process.env.HENSHIN_VCAM_TEST_PATTERN === '1') {
@@ -53,11 +53,11 @@ function normalizeRendererFrame(rgbaBuffer, width, height) {
   try {
     const normalized = Buffer.from(rgbaBuffer);
     if (normalized.length !== VCAM_FRAME_BYTES) {
-      return Buffer.from(SOLID_BLACK_RGBA);
+      return null;
     }
     return normalized;
   } catch {
-    return Buffer.from(SOLID_BLACK_RGBA);
+    return null;
   }
 }
 
@@ -68,52 +68,44 @@ function getNativeBinDir() {
   // Dev: support both app-local and repo-root native-camera layouts.
   const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const candidates = [
-    path.join(appDir, 'native-camera', 'build', 'Release'),
-    path.join(appDir, '..', 'native-camera', 'build', 'Release'),
+    path.join(appDir, '..', 'native-camera-v2'),
   ];
 
   return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
 }
 
 function getRegistrarPath() {
-  return path.join(getNativeBinDir(), 'henshin_cam_registrar.exe');
+  return app.isPackaged
+    ? path.join(getNativeBinDir(), 'henshin-vcam-register.exe')
+    : path.join(getNativeBinDir(), 'registrar', 'build', 'Release', 'henshin-vcam-register.exe');
 }
 
 function getPublisherPath() {
-  return path.join(getNativeBinDir(), 'henshin_cam_pipe_publisher.exe');
-}
-
-function getAkVCamManagerPath() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'akvirtualcamera', 'x64', 'AkVCamManager.exe');
-  }
-  const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-  return path.join(appDir, 'vendor', 'akvirtualcamera', 'x64', 'AkVCamManager.exe');
+  return app.isPackaged
+    ? path.join(getNativeBinDir(), 'henshin-vcam-publisher.exe')
+    : path.join(getNativeBinDir(), 'publisher', 'build', 'Release', 'henshin-vcam-publisher.exe');
 }
 
 // Run the registrar probe; if unhealthy, run install.
 // Only attempts repair in the packaged app (installer already ran elevated).
 function ensureVCamRegistration() {
-  if (!app.isPackaged || USE_AKVCAM_BACKEND) return; // dev/Windows 10 — skip
+  if (!app.isPackaged) return;
   const registrar = getRegistrarPath();
   if (!fs.existsSync(registrar)) return;
 
   execFile(registrar, ['probe'], { timeout: 10000 }, (err) => {
     if (err) {
       // Probe failed — attempt repair (installer set the exe to run elevated)
-      execFile(registrar, ['install', '--all-users'], { timeout: 30000 }, (err2) => {
-        if (err2) {
-          // Fall back to current-user install
-          execFile(registrar, ['install'], { timeout: 30000 }, () => {});
-        }
-      });
+      const dll = path.join(getNativeBinDir(), 'henshin-vcam.dll');
+      execFile(registrar, ['install', '--dll', dll], { timeout: 30000 }, () => {});
     }
   });
 }
 
 // Spawn the frame-publisher child process.
 function startVCamPublisher() {
-  const publisherPath = USE_AKVCAM_BACKEND ? getAkVCamManagerPath() : getPublisherPath();
+  if (process.platform !== 'win32') return;
+  const publisherPath = getPublisherPath();
   if (!fs.existsSync(publisherPath)) {
     console.error('[vcam-publisher] executable not found at', publisherPath);
     return;
@@ -121,39 +113,51 @@ function startVCamPublisher() {
 
   if (vcamPublisher) return; // already running
 
-  const publisherArgs = USE_AKVCAM_BACKEND
-    ? ['stream', 'HenshinCamera', 'BGRA', String(VCAM_FRAME_WIDTH), String(VCAM_FRAME_HEIGHT), '-f', String(VCAM_FPS)]
-    : [];
-  vcamPublisher = spawn(publisherPath, publisherArgs, {
+  vcamPublisherReady = false;
+  vcamPublisherRestartBlocked = false;
+  vcamPublisherLastError = null;
+  vcamPublisherStderr = '';
+  vcamPublisher = spawn(publisherPath, [], {
     stdio: ['pipe', 'ignore', 'pipe'],
     windowsHide: true,
   });
 
-  vcamPublisher.stderr.on('data', (d) =>
-    console.error('[vcam-publisher]', d.toString().trim()));
+  vcamPublisher.stderr.on('data', (data) => {
+    vcamPublisherStderr += String(data);
+    const lines = vcamPublisherStderr.split(/\r?\n/);
+    vcamPublisherStderr = lines.pop() || '';
+    for (const line of lines) {
+      if (line.trim()) console.log('[vcam-publisher]', line.trim());
+      if (/ready/i.test(line)) { vcamPublisherReady = true; vcamPublisherHeartbeatAt = Date.now(); }
+      if (/heartbeat/i.test(line)) vcamPublisherHeartbeatAt = Date.now();
+      const generation = line.match(/generation[=\s:]+(\d+)/i);
+      if (generation) vcamPublisherGeneration = Number(generation[1]);
+      const createFile = line.match(/CreateFile failed\s+(\d+)/i);
+      if (createFile) { vcamPublisherLastError = `CreateFile ${createFile[1]}`; if (createFile[1] === '1224') vcamPublisherRestartBlocked = true; }
+    }
+  });
 
   vcamPublisher.on('exit', (code) => {
     console.warn('[vcam-publisher] exited with code', code);
     vcamPublisher      = null;
     vcamPublisherReady = false;
     vcamPublisherWritable = true;
-    // Auto-restart after 2 s if the app is still running
-    setTimeout(() => { if (!app.isQuitting) startVCamPublisher(); }, 2000);
+    if (!vcamPublisherLastError) vcamPublisherLastError = `exited ${code}`;
+    // Publisher status is truth. Never loop-restart a stale or locked mapping.
   });
 
   vcamPublisher.stdin.on('error', (err) => {
     if (err.code === 'EPIPE') {
-      console.warn('[vcam-publisher] stdin EPIPE — restarting');
-      vcamPublisher.kill();
+      console.warn('[vcam-publisher] stdin EPIPE — publisher unavailable');
+      vcamPublisherReady = false;
     }
   });
   vcamPublisher.stdin.on('drain', () => {
     vcamPublisherWritable = true;
   });
 
-  vcamPublisherReady = true;
   vcamPublisherWritable = true;
-  console.log(`[vcam-publisher] using ${USE_AKVCAM_BACKEND ? 'akvirtualcamera DirectShow' : 'Henshin Media Foundation'} backend`);
+  console.log('[vcam-publisher] waiting for FrameServer bridge readiness');
 }
 
 function stopVCamPublisher() {
@@ -166,23 +170,15 @@ function stopVCamPublisher() {
   }
 }
 
-// Build and write the 40-byte PipeFrameHeader followed by the BGRA payload.
-// The renderer sends RGBA (browser-native); we swap R↔B here so the DLL
-// receives BGRA as it expects.
+// Build and write the 40-byte header followed by browser-native RGBA. The
+// publisher performs the same BT.709 limited-range NV12 conversion as fxswap37.
 function writeFrameToPublisher(rgbaBuffer, width, height) {
   if (!vcamPublisher || !vcamPublisherReady || !vcamPublisherWritable) return;
 
   const stride       = VCAM_FRAME_STRIDE;
   const payloadBytes = VCAM_FRAME_BYTES;
   const safeRgba     = normalizeRendererFrame(rgbaBuffer, width, height);
-
-  // R↔B swap (RGBA → BGRA) in-place on a copy
-  const bgra = Buffer.from(safeRgba);
-  for (let i = 0; i < bgra.length; i += 4) {
-    const r = bgra[i];
-    bgra[i]     = bgra[i + 2]; // B ← R
-    bgra[i + 2] = r;           // R ← B
-  }
+  if (!safeRgba) return;
 
   const timestampHns = BigInt(Date.now()) * 10000n; // ms → 100ns units
 
@@ -199,9 +195,16 @@ function writeFrameToPublisher(rgbaBuffer, width, height) {
   header.writeBigInt64LE(timestampHns,   32);
 
   try {
-    vcamPublisherWritable = USE_AKVCAM_BACKEND
-      ? vcamPublisher.stdin.write(bgra)
-      : vcamPublisher.stdin.write(Buffer.concat([header, bgra]));
+    const headerOk = vcamPublisher.stdin.write(header);
+    const payloadOk = vcamPublisher.stdin.write(safeRgba);
+    vcamPublisherWritable = headerOk && payloadOk;
+    if (!vcamPublisherWritable && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('vcam-paused', true);
+      vcamPublisher.stdin.once('drain', () => {
+        vcamPublisherWritable = true;
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('vcam-paused', false);
+      });
+    }
   } catch (e) {
     // Ignore EPIPE here — the 'error' handler on stdin will trigger restart
   }
@@ -560,7 +563,19 @@ ipcMain.on('sendVirtualCameraFrame', (_event, { buffer, width, height }) => {
 });
 
 // Query whether the publisher is alive
-ipcMain.handle('vcam-status', () => ({ ready: vcamPublisherReady }));
+ipcMain.handle('vcam-status', () => ({
+  ready: vcamPublisherReady,
+  width: VCAM_FRAME_WIDTH,
+  height: VCAM_FRAME_HEIGHT,
+  name: 'Henshin Camera',
+  clsid: '{4F8B2E01-3C7D-4A9F-B6E2-8D1C5A3F9B7E}',
+  generation: vcamPublisherGeneration,
+  lastError: vcamPublisherLastError,
+  heartbeatAgeMs: vcamPublisherHeartbeatAt == null ? null : Date.now() - vcamPublisherHeartbeatAt,
+  paused: !vcamPublisherWritable,
+  restartBlocked: vcamPublisherRestartBlocked,
+  dataPlane: 'stdin-hnsh-rgba',
+}));
 
 registerUpdaterIpc();
 

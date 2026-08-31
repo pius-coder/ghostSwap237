@@ -23,15 +23,6 @@
             "dist/**/*",
             "electron/**/*"
         ],
-        "extraResources": [
-            {
-                "from": "vendor/akvirtualcamera",
-                "to": "akvirtualcamera",
-                "filter": [
-                    "**/*"
-                ]
-            }
-        ],
         "afterPack": "build/afterPack.cjs",
         "win": {
             "target": [
@@ -59,6 +50,8 @@
         "lint": "eslint .",
         "preview": "vite preview",
         "electron:dev": "node scripts/dev-electron.mjs",
+        "camera:build": "powershell -NoProfile -ExecutionPolicy Bypass -File ../native-camera-v2/build-all.ps1 -Config Release",
+        "camera:test": "powershell -NoProfile -ExecutionPolicy Bypass -File ../native-camera-v2/build-all.ps1 -Config Debug -Tests",
         "electron:build": "bun run build && electron-builder --win",
         "electron:release": "bun run build && electron-builder --win --publish never",
         "release:sync": "bun run scripts/sync-release-version.mjs",
