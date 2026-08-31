@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, Loader2, ArrowRight, Coins, ShieldCheck } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, ArrowRight, Coins, ShieldCheck, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { AnimatedNumber } from '@/components/ui/animated-number';
@@ -11,17 +11,26 @@ import { useApp } from '@/context/AppContext';
 import { apiFetch } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
 
-type VerifyState = 'verifying' | 'success' | 'awaiting_admin' | 'processing' | 'failed';
+type VerifyState =
+  | 'verifying'
+  | 'pending'
+  | 'success'
+  | 'fulfilment_failed'
+  | 'failed'
+  | 'expired';
 
 const MAX_STATUS_CHECKS = 6;
 const STATUS_POLL_INTERVAL_MS = 4_000;
 
-interface FapshiStatusResponse {
+interface StatusResponse {
   providerStatus?: string;
   paymentStatus?: string;
+  fulfilmentStatus?: string;
   credits?: number;
   amount?: number;
   currency?: string;
+  failureReason?: string;
+  error?: string;
 }
 
 function PaymentSuccess() {
@@ -39,6 +48,7 @@ function PaymentSuccess() {
   const externalSearchParams = new URLSearchParams(window.location.search);
   const paymentId = searchParams.get('ref') || externalSearchParams.get('ref');
   const transactionId = searchParams.get('transId') || externalSearchParams.get('transId');
+  const paymentProvider = searchParams.get('provider') || externalSearchParams.get('provider') || 'fapshi';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -46,7 +56,7 @@ function PaymentSuccess() {
     const checkPayment = async () => {
       try {
         setState('verifying');
-        setMessage('Checking your payment...');
+        setMessage('Verification in progress…');
 
         const {
           data: { session },
@@ -66,19 +76,18 @@ function PaymentSuccess() {
         const queryKey = paymentId ? 'ref' : 'transId';
 
         for (let attempt = 0; attempt < MAX_STATUS_CHECKS; attempt += 1) {
-          const res = await apiFetch(
-            `/payment/fapshi-status?${queryKey}=${encodeURIComponent(reference)}`,
-            {
-              method: 'GET',
-              headers: { Authorization: `Bearer ${session.access_token}` },
-              signal: controller.signal,
-              retries: 1,
-              timeoutMs: 30_000,
-            },
-          );
+          const statusPath = paymentProvider === 'chariow'
+            ? `/wallet?action=payment-status&provider=chariow&ref=${encodeURIComponent(reference)}`
+            : `/payment/fapshi-status?${queryKey}=${encodeURIComponent(reference)}`;
+          const res = await apiFetch(statusPath, {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            signal: controller.signal,
+            retries: 1,
+            timeoutMs: 30_000,
+          });
 
-          const data: FapshiStatusResponse & { error?: string } = await res.json();
-
+          const data: StatusResponse = await res.json();
           if (!res.ok) {
             if (res.status === 404) {
               setState('failed');
@@ -92,67 +101,90 @@ function PaymentSuccess() {
           setPaidCurrency(String(data.currency || 'XAF'));
           setPaidCredits(Number.isFinite(data.credits as number) ? Number(data.credits) : null);
 
+          if (data.paymentStatus === 'expired' || data.providerStatus === 'EXPIRED') {
+            setState('expired');
+            setMessage('The payment link expired before the payment was completed.');
+            return;
+          }
+
           if (
             data.paymentStatus === 'failed' ||
             data.providerStatus === 'FAILED' ||
-            data.providerStatus === 'EXPIRED'
+            data.providerStatus === 'CANCELLED'
           ) {
             setState('failed');
-            setMessage(
-              data.providerStatus === 'EXPIRED'
-                ? 'The payment link expired before the payment was completed.'
-                : 'The payment failed or was declined. No credits were added.',
-            );
+            setMessage('The payment failed or was declined. No credits were added.');
             toast.error('Payment failed');
             return;
           }
 
-          // `paymentStatus` becomes "completed" once an admin confirmed and credited.
-          if (data.paymentStatus === 'completed') {
+          if (data.fulfilmentStatus === 'fulfilled') {
             try {
               await refreshCredits();
             } catch (syncError) {
               console.warn('Failed to refresh credits:', syncError);
             }
             setState('success');
-            setMessage(
-              `${(data.credits ?? 0).toLocaleString()} credits have been added to your account.`,
-            );
+            setMessage(`${(data.credits ?? 0).toLocaleString()} credits have been added to your account.`);
             toast.success('Payment confirmed! Credits added.');
             return;
           }
 
-          if (data.providerStatus === 'SUCCESSFUL') {
-            setState('awaiting_admin');
+          if (
+            (data.paymentStatus === 'paid' ||
+              data.providerStatus === 'SUCCESSFUL' ||
+              data.providerStatus === 'COMPLETED') &&
+            data.fulfilmentStatus === 'failed'
+          ) {
+            setState('fulfilment_failed');
             setMessage(
-              'We received your payment. An administrator is reviewing it and your credits will be added shortly.',
+              data.failureReason ||
+                'Payment was confirmed but credit delivery failed. Support has been alerted.',
             );
             return;
           }
 
-          if (attempt < MAX_STATUS_CHECKS - 1) {
-            setState('processing');
-            setMessage('Your Mobile Money payment is still processing. We will check again shortly.');
-            await new Promise<void>((resolve) => {
-              const timer = window.setTimeout(resolve, STATUS_POLL_INTERVAL_MS);
-              controller.signal.addEventListener(
-                'abort',
-                () => {
+          if (
+            data.paymentStatus === 'paid' ||
+            data.providerStatus === 'SUCCESSFUL' ||
+            data.providerStatus === 'COMPLETED'
+          ) {
+            setState('fulfilment_failed');
+            setMessage(
+              'Payment confirmed. Automatic credit delivery is still pending; we will keep retrying.',
+            );
+            if (attempt < MAX_STATUS_CHECKS - 1) {
+              await new Promise<void>((resolve) => {
+                const timer = window.setTimeout(resolve, STATUS_POLL_INTERVAL_MS);
+                controller.signal.addEventListener('abort', () => {
                   window.clearTimeout(timer);
                   resolve();
-                },
-                { once: true },
-              );
+                }, { once: true });
+              });
+              if (controller.signal.aborted) return;
+              continue;
+            }
+            return;
+          }
+
+          if (attempt < MAX_STATUS_CHECKS - 1) {
+            setState('pending');
+            setMessage('Payment is still pending. We will check again shortly.');
+            await new Promise<void>((resolve) => {
+              const timer = window.setTimeout(resolve, STATUS_POLL_INTERVAL_MS);
+              controller.signal.addEventListener('abort', () => {
+                window.clearTimeout(timer);
+                resolve();
+              }, { once: true });
             });
             if (controller.signal.aborted) return;
           }
         }
 
-        setState('processing');
-        setMessage('Your payment is still processing. You can check again without starting a new payment.');
+        setState('pending');
+        setMessage('Payment is still pending. You can check again without starting a new payment.');
       } catch (error) {
         if (controller.signal.aborted) return;
-
         setState('failed');
         console.error('Payment status check error:', error);
         setMessage(
@@ -163,126 +195,100 @@ function PaymentSuccess() {
       }
     };
 
-    checkPayment();
+    void checkPayment();
     return () => controller.abort();
-  }, [checkRequest, paymentId, refreshCredits, transactionId]);
+  }, [checkRequest, paymentId, paymentProvider, refreshCredits, transactionId]);
+
+  const title =
+    state === 'verifying' ? 'Verification in progress'
+      : state === 'pending' ? 'Payment pending'
+        : state === 'success' ? 'Payment confirmed and credits delivered'
+          : state === 'fulfilment_failed' ? 'Payment confirmed — delivery issue'
+            : state === 'expired' ? 'Payment expired'
+              : 'Payment failed';
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <TextureCard contentClassName="p-8 text-center">
-          {/* Status Icon */}
           <div className="mb-6">
-            {(state === 'verifying' || state === 'processing') && (
+            {(state === 'verifying' || state === 'pending') && (
               <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center">
-                <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+                {state === 'pending' ? <Clock className="w-10 h-10 text-blue-400" /> : <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />}
               </div>
             )}
-            {(state === 'success' || state === 'awaiting_admin') && (
-              <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center animate-in zoom-in duration-300">
-                {state === 'awaiting_admin' ? (
-                  <ShieldCheck className="w-10 h-10 text-blue-400" />
-                ) : (
-                  <CheckCircle className="w-10 h-10 text-blue-400" />
-                )}
+            {state === 'success' && (
+              <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center">
+                <CheckCircle className="w-10 h-10 text-blue-400" />
               </div>
             )}
-            {state === 'failed' && (
-              <div className="w-20 h-20 mx-auto rounded-full bg-red-500/10 flex items-center justify-center animate-in zoom-in duration-300">
+            {state === 'fulfilment_failed' && (
+              <div className="w-20 h-20 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center">
+                <ShieldCheck className="w-10 h-10 text-amber-400" />
+              </div>
+            )}
+            {(state === 'failed' || state === 'expired') && (
+              <div className="w-20 h-20 mx-auto rounded-full bg-red-500/10 flex items-center justify-center">
                 <XCircle className="w-10 h-10 text-red-500" />
               </div>
             )}
           </div>
 
-          {/* Title */}
-          <h1 className="text-2xl font-bold text-white mb-2 tracking-tight">
-            {state === 'verifying' && 'Checking Payment'}
-            {state === 'processing' && 'Payment In Progress'}
-            {state === 'awaiting_admin' && 'Payment Received'}
-            {state === 'success' && 'Payment Confirmed!'}
-            {state === 'failed' && 'Payment Failed'}
-          </h1>
-
-          {/* Message */}
+          <h1 className="text-2xl font-bold text-white mb-2 tracking-tight">{title}</h1>
           <p className="mb-8 text-sm text-muted-foreground">{message}</p>
 
-          {/* Amount Display */}
-          {(state === 'success' || state === 'awaiting_admin') && (paidAmount || paidCredits) && (
+          {(state === 'success' || state === 'fulfilment_failed') && (paidAmount || paidCredits) && (
             <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 mb-6">
-              {paidCredits && state === 'success' && (
+              {paidCredits && (
                 <>
-                  <p className="text-xs text-blue-300/70 mb-1">Credits Added</p>
+                  <p className="text-xs text-blue-300/70 mb-1">
+                    {state === 'success' ? 'Credits added' : 'Credits expected'}
+                  </p>
                   <p className="text-3xl font-bold text-blue-300">
-                     <AnimatedNumber value={paidCredits} /> credits
+                    <AnimatedNumber value={paidCredits} /> credits
                   </p>
                 </>
               )}
-              {paidCredits && state === 'awaiting_admin' && (
-                <>
-                  <p className="text-xs text-blue-300/70 mb-1">Credits Incoming</p>
-                  <p className="text-3xl font-bold text-blue-300">
-                     <AnimatedNumber value={paidCredits} /> credits
-                  </p>
-                </>
-              )}
-              {paidAmount && (
+              {paidAmount != null && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Paid amount: {paidAmount.toLocaleString()} {paidCurrency === 'XAF' ? 'FCFA' : paidCurrency}
+                  Amount: {paidAmount.toLocaleString()} {paidCurrency === 'XAF' ? 'FCFA' : paidCurrency}
                 </p>
               )}
             </div>
           )}
 
-          {/* Actions */}
           <div className="space-y-3">
-            {(state === 'processing' || state === 'failed') && (paymentId || transactionId) && (
-              <TextureButton
-                variant="secondary"
-                size="lg"
-                onClick={() => setCheckRequest((request) => request + 1)}
-                className="w-full"
-              >
-                Check again
-              </TextureButton>
-            )}
-
-            {(state === 'success' || state === 'awaiting_admin' || state === 'processing') && (
-              <>
-                <CosmicButton
-                  as="button"
-                  onClick={() => navigate('/credits')}
+            {(state === 'pending' || state === 'failed' || state === 'fulfilment_failed' || state === 'expired') &&
+              (paymentId || transactionId) && (
+                <TextureButton
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => setCheckRequest((request) => request + 1)}
                   className="w-full"
-                  contentClassName="min-h-12"
                 >
+                  Check again
+                </TextureButton>
+              )}
+
+            {(state === 'success' || state === 'fulfilment_failed' || state === 'pending') && (
+              <>
+                <CosmicButton as="button" onClick={() => navigate('/credits')} className="w-full" contentClassName="min-h-12">
                   <Coins className="w-4 h-4 mr-2" />
                   Go to Credits
                 </CosmicButton>
-                <TextureButton
-                  variant="minimal"
-                  onClick={() => navigate('/dashboard')}
-                  className="w-full"
-                >
+                <TextureButton variant="minimal" onClick={() => navigate('/dashboard')} className="w-full">
                   Back to Dashboard
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </TextureButton>
               </>
             )}
 
-            {state === 'failed' && (
+            {(state === 'failed' || state === 'expired') && (
               <>
-                <CosmicButton
-                  as="button"
-                  onClick={() => navigate('/credits')}
-                  className="w-full"
-                  contentClassName="min-h-12"
-                >
+                <CosmicButton as="button" onClick={() => navigate('/credits')} className="w-full" contentClassName="min-h-12">
                   Try Again
                 </CosmicButton>
-                <TextureButton
-                  variant="minimal"
-                  onClick={() => navigate('/dashboard')}
-                  className="w-full"
-                >
+                <TextureButton variant="minimal" onClick={() => navigate('/dashboard')} className="w-full">
                   Back to Dashboard
                 </TextureButton>
               </>
@@ -290,10 +296,8 @@ function PaymentSuccess() {
           </div>
         </TextureCard>
 
-        {/* Footer note */}
         <p className="mt-6 text-center text-xs text-muted-foreground/60">
-          Credits are added once an administrator confirms your payment, usually within a few
-          minutes.
+          This page never credits your wallet directly. Credits are delivered only after server-side payment verification.
         </p>
       </div>
     </div>

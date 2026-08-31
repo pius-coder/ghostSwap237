@@ -137,8 +137,7 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
         <div className="flex items-start gap-3 rounded-xl border border-blue-500/15 bg-primary/5 p-4">
           <ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" />
           <p className="text-xs leading-relaxed text-muted-foreground">
-            After payment, your request is reviewed by an administrator and credits are added to
-            your wallet shortly.
+            After Fapshi confirms the payment, credits are added automatically to your wallet.
           </p>
         </div>
 
