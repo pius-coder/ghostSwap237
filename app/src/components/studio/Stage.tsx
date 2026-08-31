@@ -4,7 +4,7 @@
 // the stage (bounded) and can expand into a split view without remounting
 // the camera.
 import { useEffect, useRef, useState } from 'react';
-import { useX2Track } from '@reactor-models/x2';
+import { X2MainVideoView } from '@reactor-models/x2';
 import { Pipette, SplitSquareHorizontal, X } from 'lucide-react';
 import { MetalIconButton } from '@/components/ui/metal-button';
 import { useSessionCommands } from '@/lib/session/sessionContext';
@@ -45,7 +45,6 @@ function Placeholder({ provider }: { provider: LiveProvider }) {
     </div>
   );
 }
-
 export function Stage({
   generating,
   activeLabel,
@@ -174,7 +173,7 @@ export function Stage({
             className="absolute inset-0 h-full w-full object-contain"
           />
         ) : (
-          <FastOutputVideo />
+          <X2MainVideoView videoObjectFit="contain" className="absolute inset-0 h-full w-full" />
         )}
         {!generating && !proLive && <Placeholder provider={liveProvider} />}
         <span className="pointer-events-none absolute left-2 top-2 max-w-[40%] truncate rounded bg-black/70 px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-tight text-white/60">
@@ -245,33 +244,5 @@ export function Stage({
         </div>
       )}
     </section>
-  );
-}
-
-function FastOutputVideo() {
-  const track = useX2Track('main_video');
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const stream = track ? new MediaStream([track]) : null;
-    video.srcObject = stream;
-    if (stream) void video.play().catch(() => {});
-    return () => {
-      if (video.srcObject === stream) video.srcObject = null;
-    };
-  }, [track]);
-
-  return (
-    <video
-      id="output"
-      ref={videoRef}
-      autoPlay
-      playsInline
-      muted
-      data-vcam-capture="fast"
-      className="absolute inset-0 h-full w-full object-contain"
-    />
   );
 }

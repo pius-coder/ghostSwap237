@@ -47,14 +47,13 @@ function isClosedTransportError(err: unknown): boolean {
 export function JsSessionProvider({ children }: { children: ReactNode }) {
   const x2 = useX2();
   const x2Ref = useRef(x2);
+  useEffect(() => {
+    x2Ref.current = x2;
+  }, [x2]);
   const pointerDeadRef = useRef(false);
   const hasReferenceRef = useRef(false);
   const [eventError, setEventError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState(EMPTY_SESSION_METADATA);
-
-  useEffect(() => {
-    x2Ref.current = x2;
-  }, [x2]);
 
   useX2StateUpdate((message) => {
     hasReferenceRef.current = message.has_reference_image;
