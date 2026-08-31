@@ -11,6 +11,8 @@ import { ROUTES } from '@/lib/routes';
 
 const Login = lazy(() => import('@/pages/Login'));
 import { UpdateModal } from '@/components/UpdateModal';
+import { LegalGate } from '@/components/LegalGate';
+import { LaunchPrivacyNotice } from '@/components/LaunchPrivacyNotice';
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const PreviewWindow = lazy(() => import('@/pages/PreviewWindow'));
 const Wallet = lazy(() => import('@/pages/Wallet'));
@@ -26,6 +28,7 @@ function App() {
       <HashRouter>
         <AuthProvider>
           <AppProvider>
+            <LegalGate>
               <Suspense fallback={<LoadingScreen />}>
                 <Routes>
                   <Route
@@ -77,6 +80,8 @@ function App() {
               </Suspense>
               <Toaster />
               <UpdateModal />
+              <LaunchPrivacyNotice />
+            </LegalGate>
             </AppProvider>
         </AuthProvider>
       </HashRouter>

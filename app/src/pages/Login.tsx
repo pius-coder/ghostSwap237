@@ -1,5 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Checkbox } from '@/components/ui/checkbox';
+import { LegalDocuments } from '@/components/LegalDocuments';
 import { Loader2, Eye, EyeOff, MailCheck } from 'lucide-react';
 import { CosmicButton } from '@/components/ui/cosmic-button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +21,8 @@ function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [legalScrolled, setLegalScrolled] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
 
   useEffect(() => {
     if (error) {
@@ -39,6 +43,7 @@ function Login() {
         await login(email, password);
         toast.success('Welcome back!');
       } else {
+        if (!legalScrolled || !legalAccepted) throw new Error('Scroll through and accept the Terms and Privacy Notice first.');
         const result = await register(email, name, password);
         if (result.requiresEmailConfirmation) {
           navigate(ROUTES.PUBLIC.LOGIN, {
@@ -61,10 +66,19 @@ function Login() {
 
   const handleGoogleLogin = async () => {
     try {
+      if (!isLogin && (!legalScrolled || !legalAccepted)) {
+        toast.error('Scroll through and accept the Terms and Privacy Notice first.');
+        return;
+      }
       await loginWithGoogle();
     } catch {
       // Error is handled by the auth context and shown via toast
     }
+  };
+
+  const handleLegalScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const element = event.currentTarget;
+    if (element.scrollTop + element.clientHeight >= element.scrollHeight - 12) setLegalScrolled(true);
   };
 
   return (
@@ -199,10 +213,17 @@ function Login() {
                       </TextureButton>
                     </div>
                   </div>
+                  {!isLogin && (
+                    <div className="space-y-3 rounded-lg border border-border p-3">
+                      <p className="text-xs font-medium text-foreground">Required Terms and Privacy Notice</p>
+                      <div onScroll={handleLegalScroll} className="custom-scrollbar h-52 overflow-y-auto rounded border border-border/70 p-3"><LegalDocuments /></div>
+                      <label className="flex items-start gap-2 text-xs text-muted-foreground"><Checkbox disabled={!legalScrolled} checked={legalAccepted} onCheckedChange={(value) => setLegalAccepted(value === true)} /><span>I accept the Terms and acknowledge the Privacy Notice. Scroll to the bottom to enable this box.</span></label>
+                    </div>
+                  )}
                   <CosmicButton
                     as="button"
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || (!isLogin && (!legalScrolled || !legalAccepted))}
                     className="w-full"
                     contentClassName="min-h-11"
                   >
