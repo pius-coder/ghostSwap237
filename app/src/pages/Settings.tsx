@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Download, Loader2, RefreshCw, Rocket } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { CosmicButton } from '@/components/ui/cosmic-button';
@@ -18,6 +19,9 @@ import {
   type DesktopUpdateState,
   type DesktopUpdateStatus,
 } from '@/lib/desktop-updater';
+import { formatDateTime } from '@/i18n/format';
+import { useLocalePreference } from '@/i18n/useLocalePreference';
+import type { AppLocale } from '@/i18n/locale';
 import { toast } from 'sonner';
 
 const INITIAL_UPDATE_STATE: DesktopUpdateState = {
@@ -25,7 +29,7 @@ const INITIAL_UPDATE_STATE: DesktopUpdateState = {
   currentVersion: CURRENT_VERSION,
   latestVersion: null,
   progress: 0,
-  message: 'Checking desktop updater availability...',
+  message: '',
   checkedAt: null,
   downloadUrl: null,
   downloadedFilePath: null,
@@ -38,27 +42,33 @@ const INITIAL_UPDATE_STATE: DesktopUpdateState = {
   canAutoInstall: false,
 };
 
-function getUpdateButtonLabel(status: DesktopUpdateStatus): string {
+function getUpdateButtonLabel(status: DesktopUpdateStatus, t: (key: string) => string): string {
   switch (status) {
     case 'checking':
-      return 'Checking...';
+      return t('settings.checking');
     case 'downloading':
-      return 'Downloading...';
+      return t('settings.downloading');
     case 'installing':
-      return 'Installing...';
+      return t('settings.installing');
     case 'downloaded':
-      return 'Restart to Install';
+      return t('settings.restartToInstall');
     default:
-      return 'Check for Updates';
+      return t('settings.checkForUpdates');
   }
 }
 
 function Settings() {
+  const { t } = useTranslation();
+  const { locale, setLocale } = useLocalePreference();
   const { user, logout } = useAuth();
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [isSaving, setIsSaving] = useState(false);
-  const [updateState, setUpdateState] = useState<DesktopUpdateState>(INITIAL_UPDATE_STATE);
+  const [localeBusy, setLocaleBusy] = useState(false);
+  const [updateState, setUpdateState] = useState<DesktopUpdateState>({
+    ...INITIAL_UPDATE_STATE,
+    message: t('settings.checkingAvailability'),
+  });
   const previousUpdateStatusRef = useRef<DesktopUpdateStatus | null>(null);
 
   useEffect(() => {
@@ -94,18 +104,31 @@ function Settings() {
     } else if (updateState.status === 'downloaded') {
       toast.success(updateState.message);
     } else if (updateState.status === 'installing') {
-      toast.message('Installing the latest desktop update and restarting...');
+      toast.message(t('settings.installingToast'));
     } else if (updateState.status === 'error' && updateState.error) {
       toast.error(updateState.error);
     }
 
     previousUpdateStatusRef.current = updateState.status;
-  }, [updateState.error, updateState.message, updateState.status]);
+  }, [t, updateState.error, updateState.message, updateState.status]);
+
+  const handleLocaleChange = async (next: AppLocale) => {
+    if (next === locale || localeBusy) return;
+    setLocaleBusy(true);
+    try {
+      await setLocale(next, { persistServer: true });
+      toast.success(t('locale.saved'));
+    } catch {
+      toast.error(t('locale.saveFailed'));
+    } finally {
+      setLocaleBusy(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
     await new Promise(resolve => setTimeout(resolve, 1000));
-    toast.success('Profile updated successfully');
+    toast.success(t('settings.profileSaved'));
     setIsSaving(false);
   };
 
@@ -118,7 +141,7 @@ function Settings() {
 
       await checkForDesktopUpdates();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to complete desktop update.';
+      const message = error instanceof Error ? error.message : t('settings.updateFailed');
       toast.error(message);
     }
   };
@@ -129,8 +152,8 @@ function Settings() {
     updateState.status === 'installing';
 
   const checkedAtLabel = updateState.checkedAt
-    ? new Date(updateState.checkedAt).toLocaleString()
-    : 'Not checked yet';
+    ? formatDateTime(updateState.checkedAt, locale)
+    : t('settings.notCheckedYet');
   const releaseNotes = updateState.notes
     ?.split(/\r?\n/)
     .filter((line) => !/\bsha-?256\b/i.test(line))
@@ -140,15 +163,40 @@ function Settings() {
   return (
     <div className="max-w-3xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage your account settings and preferences</p>
+        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">{t('settings.title')}</h1>
+        <p className="text-sm text-muted-foreground">{t('settings.subtitle')}</p>
       </div>
 
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-white tracking-tight">Desktop Updates</CardTitle>
-            <CardDescription className="text-xs">Keep Henshin 変身 current without re-downloading the installer manually</CardDescription>
+            <CardTitle className="text-lg font-semibold text-white tracking-tight">{t('locale.sectionTitle')}</CardTitle>
+            <CardDescription className="text-xs">{t('locale.sectionDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="flex flex-wrap gap-3">
+              <TextureButton
+                variant={locale === 'fr' ? 'accent' : 'secondary'}
+                disabled={localeBusy}
+                onClick={() => void handleLocaleChange('fr')}
+              >
+                {t('locale.french')}
+              </TextureButton>
+              <TextureButton
+                variant={locale === 'en' ? 'accent' : 'secondary'}
+                disabled={localeBusy}
+                onClick={() => void handleLocaleChange('en')}
+              >
+                {t('locale.english')}
+              </TextureButton>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-white tracking-tight">{t('settings.updates')}</CardTitle>
+            <CardDescription className="text-xs">{t('settings.updatesDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -161,10 +209,10 @@ function Settings() {
                   ) : (
                     <RefreshCw className={`w-4 h-4 ${isUpdaterBusy ? 'text-blue-400 animate-spin' : 'text-muted-foreground'}`} />
                   )}
-                  <p className="text-sm font-medium text-white">Update Status</p>
+                  <p className="text-sm font-medium text-white">{t('settings.updateStatus')}</p>
                 </div>
                 <p className="text-sm text-foreground/90">{updateState.message}</p>
-                <p className="text-xs text-muted-foreground">Last checked: {checkedAtLabel}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.lastChecked', { when: checkedAtLabel })}</p>
               </div>
               <TextureButton
                 variant="accent"
@@ -179,23 +227,27 @@ function Settings() {
                 ) : (
                   <Download className="w-4 h-4 mr-2" />
                 )}
-                {getUpdateButtonLabel(updateState.status)}
+                {getUpdateButtonLabel(updateState.status, t)}
               </TextureButton>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <TextureCard contentClassName="p-4">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">Current Version</p>
+                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('settings.currentVersion')}</p>
                 <p className="text-lg font-semibold text-white">{updateState.currentVersion}</p>
               </TextureCard>
               <TextureCard contentClassName="p-4">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">Latest Version</p>
-                <p className="text-lg font-semibold text-white">{updateState.latestVersion || 'Unknown'}</p>
+                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('settings.latestVersion')}</p>
+                <p className="text-lg font-semibold text-white">{updateState.latestVersion || t('common.unknown')}</p>
               </TextureCard>
               <TextureCard contentClassName="p-4">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">Install Mode</p>
+                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('settings.installMode')}</p>
                 <p className="text-lg font-semibold text-white">
-                  {updateState.canAutoInstall ? 'Automatic' : updateState.isElectron ? 'Download Only' : 'Browser'}
+                  {updateState.canAutoInstall
+                    ? t('settings.automatic')
+                    : updateState.isElectron
+                      ? t('settings.downloadOnly')
+                      : t('settings.browser')}
                 </p>
               </TextureCard>
             </div>
@@ -203,7 +255,7 @@ function Settings() {
             {(updateState.status === 'downloading' || updateState.status === 'installing' || updateState.status === 'downloaded') && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Update progress</span>
+                  <span>{t('settings.updateProgress')}</span>
                   <span>{Math.max(0, Math.min(100, updateState.progress))}%</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full border border-border/70 bg-background/70">
@@ -217,27 +269,23 @@ function Settings() {
 
             {updateState.downloadedFileName && (
               <p className="text-xs text-muted-foreground">
-                Downloaded package: <span className="text-foreground/90">{updateState.downloadedFileName}</span>
+                {t('settings.downloadedPackage', { name: updateState.downloadedFileName })}
               </p>
             )}
 
             {releaseNotes && (
               <TextureCard contentClassName="p-4">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">Release Notes</p>
+                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('settings.releaseNotes')}</p>
                 <p className="whitespace-pre-wrap text-sm text-foreground/90">{releaseNotes}</p>
               </TextureCard>
             )}
 
             {!updateState.isElectron && (
-              <p className="text-xs text-muted-foreground">
-                Open the Electron desktop app to check for updates, download new builds, and restart automatically.
-              </p>
+              <p className="text-xs text-muted-foreground">{t('settings.electronRequired')}</p>
             )}
 
             {updateState.isElectron && !updateState.isPackaged && (
-              <p className="text-xs text-muted-foreground">
-                You&apos;re running the desktop app in development mode. Update checks work here, but automatic install is only enabled in packaged Windows builds.
-              </p>
+              <p className="text-xs text-muted-foreground">{t('settings.devModeNote')}</p>
             )}
 
           </CardContent>
@@ -245,13 +293,13 @@ function Settings() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-white tracking-tight">Profile Information</CardTitle>
-            <CardDescription className="text-xs">Update your account details</CardDescription>
+            <CardTitle className="text-lg font-semibold text-white tracking-tight">{t('settings.profile')}</CardTitle>
+            <CardDescription className="text-xs">{t('settings.profileDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm font-medium text-muted-foreground">Full Name</Label>
+                <Label htmlFor="name" className="text-sm font-medium text-muted-foreground">{t('settings.fullName')}</Label>
                 <Input
                   id="name"
                   value={name}
@@ -260,7 +308,7 @@ function Settings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium text-muted-foreground">Email Address</Label>
+                <Label htmlFor="email" className="text-sm font-medium text-muted-foreground">{t('settings.emailAddress')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -275,37 +323,37 @@ function Settings() {
               onClick={handleSaveProfile}
               disabled={isSaving}
             >
-              {isSaving ? 'Saving...' : 'Save Changes'}
+              {isSaving ? t('common.saving') : t('settings.saveChanges')}
             </CosmicButton>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-white tracking-tight">Notifications</CardTitle>
-            <CardDescription className="text-xs">Configure your notification preferences</CardDescription>
+            <CardTitle className="text-lg font-semibold text-white tracking-tight">{t('settings.notifications')}</CardTitle>
+            <CardDescription className="text-xs">{t('settings.notificationsDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-sm font-medium text-white">Email Notifications</Label>
-                <p className="text-xs text-muted-foreground">Receive email updates about your account</p>
+                <Label className="text-sm font-medium text-white">{t('settings.emailNotifications')}</Label>
+                <p className="text-xs text-muted-foreground">{t('settings.emailNotificationsHint')}</p>
               </div>
               <Switch defaultChecked />
             </div>
             <Separator className="bg-border/70" />
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-sm font-medium text-white">Low Credit Alerts</Label>
-                <p className="text-xs text-muted-foreground">Get notified when your credits are low</p>
+                <Label className="text-sm font-medium text-white">{t('settings.lowCreditAlerts')}</Label>
+                <p className="text-xs text-muted-foreground">{t('settings.lowCreditAlertsHint')}</p>
               </div>
               <Switch defaultChecked />
             </div>
             <Separator className="bg-border/70" />
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-sm font-medium text-white">Marketing Emails</Label>
-                <p className="text-xs text-muted-foreground">Receive updates about new features and offers</p>
+                <Label className="text-sm font-medium text-white">{t('settings.marketingEmails')}</Label>
+                <p className="text-xs text-muted-foreground">{t('settings.marketingEmailsHint')}</p>
               </div>
               <Switch />
             </div>
@@ -314,20 +362,20 @@ function Settings() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-white tracking-tight">Danger Zone</CardTitle>
-            <CardDescription className="text-xs">Irreversible actions</CardDescription>
+            <CardTitle className="text-lg font-semibold text-white tracking-tight">{t('settings.danger')}</CardTitle>
+            <CardDescription className="text-xs">{t('settings.dangerDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-sm font-medium text-white">Sign Out</Label>
-                <p className="text-xs text-muted-foreground">Sign out of your account on this device</p>
+                <Label className="text-sm font-medium text-white">{t('settings.signOutLabel')}</Label>
+                <p className="text-xs text-muted-foreground">{t('settings.signOutHint')}</p>
               </div>
               <TextureButton
                 onClick={logout}
                 variant="destructive"
               >
-                Sign Out
+                {t('common.signOut')}
               </TextureButton>
             </div>
           </CardContent>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2, Smartphone, ShieldCheck } from 'lucide-react';
 import { CosmicButton } from '@/components/ui/cosmic-button';
 import {
@@ -13,6 +14,8 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { getApiUrl } from '@/lib/api-client';
+import { formatCredits, formatCurrency } from '@/i18n/format';
+import { useLocalePreference } from '@/i18n/useLocalePreference';
 
 interface FapshiPaymentModalProps {
   isOpen: boolean;
@@ -37,7 +40,16 @@ function getElectronIpcRenderer(): ElectronIpcRenderer | null {
   }
 }
 
+function translateApiError(message: string | undefined, t: (key: string) => string, fallback: string): string {
+  if (!message) return fallback;
+  const key = `errors.${message}`;
+  const translated = t(key);
+  return translated === key ? message : translated;
+}
+
 export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModalProps) {
+  const { t } = useTranslation();
+  const { locale } = useLocalePreference();
   const { user } = useAuth();
   const [isRedirecting, setIsRedirecting] = useState(false);
 
@@ -47,7 +59,7 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
     setIsRedirecting(true);
 
     try {
-      if (!plan.id) throw new Error('Invalid credit package');
+      if (!plan.id) throw new Error(t('payments.invalidPackage'));
       const ipcRenderer = getElectronIpcRenderer();
 
       const {
@@ -55,7 +67,7 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
         error: sessionError,
       } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
-        throw new Error('Your session has expired. Please sign in again.');
+        throw new Error(t('auth.sessionExpired'));
       }
 
       const response = await fetch(getApiUrl('/payment/fapshi-init'), {
@@ -73,11 +85,11 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
 
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.link) {
-        throw new Error(result.error || 'Failed to create the payment.');
+        throw new Error(translateApiError(result.error, t, t('payments.createPaymentFailed')));
       }
 
       const paymentLink = String(result.link);
-      toast.success('Opening secure Fapshi checkout...');
+      toast.success(t('payments.openingFapshi'));
 
       if (ipcRenderer) {
         await ipcRenderer.invoke('open-payment-link', paymentLink);
@@ -91,7 +103,7 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
       toast.error(
         error instanceof Error && error.message
           ? error.message
-          : 'Failed to start the payment',
+          : t('payments.startPaymentFailed'),
       );
       setIsRedirecting(false);
     }
@@ -110,25 +122,27 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
       >
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold tracking-tight text-foreground">
-            Mobile Money payment
+            {t('payments.fapshiTitle')}
           </DialogTitle>
           <DialogDescription className="leading-relaxed">
-            Pay securely with MTN Mobile Money or Orange Money through Fapshi.
+            {t('payments.fapshiDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="rounded-xl border border-blue-500/15 bg-panel p-4">
           <div className="mb-2 flex items-center justify-between gap-4">
-            <span className="text-sm text-muted-foreground">Package</span>
-            <span className="font-semibold text-foreground">{plan.credits.toLocaleString()} Credits</span>
+            <span className="text-sm text-muted-foreground">{t('payments.package')}</span>
+            <span className="font-semibold text-foreground">
+              {t('payments.selectedCredits', { count: formatCredits(plan.credits, locale) })}
+            </span>
           </div>
           <div className="flex items-center justify-between gap-4">
-            <span className="text-sm text-muted-foreground">Amount</span>
+            <span className="text-sm text-muted-foreground">{t('payments.amount')}</span>
             <span className="text-xl font-bold text-primary">
               {plan.priceXAF > 0
-                ? `${plan.priceXAF.toLocaleString()} FCFA`
+                ? formatCurrency(plan.priceXAF, 'XAF', locale)
                 : plan.priceUSD
-                  ? `$${plan.priceUSD.toLocaleString()}`
+                  ? formatCurrency(plan.priceUSD, 'USD', locale)
                   : '—'}
             </span>
           </div>
@@ -137,7 +151,7 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
         <div className="flex items-start gap-3 rounded-xl border border-blue-500/15 bg-primary/5 p-4">
           <ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" />
           <p className="text-xs leading-relaxed text-muted-foreground">
-            After Fapshi confirms the payment, credits are added automatically to your wallet.
+            {t('payments.fapshiAutoCredit')}
           </p>
         </div>
 
@@ -152,12 +166,12 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
             {isRedirecting ? (
               <>
                 <Loader2 className="mr-2 size-5 animate-spin" />
-                Redirecting...
+                {t('common.redirecting')}
               </>
             ) : (
               <>
                 <Smartphone className="mr-2 size-5" />
-                Pay with Fapshi
+                {t('payments.payWithFapshi')}
               </>
             )}
           </CosmicButton>
@@ -168,7 +182,7 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
             disabled={isRedirecting}
             className="w-full"
           >
-            Cancel
+            {t('common.cancel')}
           </TextureButton>
         </div>
       </DialogContent>

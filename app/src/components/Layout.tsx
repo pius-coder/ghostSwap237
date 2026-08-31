@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Coins,
   LogOut,
@@ -20,6 +21,8 @@ import { ADMIN_NAV, HENSHIN_NAV, getPageTitle, type NavItem } from '@/lib/nav';
 import { ROUTES } from '@/lib/routes';
 import { PricingDialogProvider } from '@/components/PricingDialog';
 import { usePricingDialog } from '@/hooks/usePricingDialog';
+import { formatCredits } from '@/i18n/format';
+import { useLocalePreference } from '@/i18n/useLocalePreference';
 
 const SIDEBAR_COLLAPSED_WIDTH = 48;
 
@@ -37,6 +40,7 @@ function getInitials(name?: string): string {
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth();
   const { openPricing } = usePricingDialog();
+  const { t } = useTranslation();
 
   const renderItem = (item: NavItem) => {
     if (item.action === 'buy-credits') {
@@ -53,7 +57,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
           contentClassName="justify-start"
         >
           <item.icon className="h-[18px] w-[18px] shrink-0" />
-          <span>{item.label}</span>
+          <span>{t(item.labelKey)}</span>
         </TextureButton>
       );
     }
@@ -61,7 +65,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <NavLink key={item.path} to={item.path} onClick={onNavigate} className="nav-item w-full">
         <item.icon className="h-[18px] w-[18px] shrink-0" />
-        <span>{item.label}</span>
+        <span>{t(item.labelKey)}</span>
       </NavLink>
     );
   };
@@ -79,9 +83,9 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
           >
             <item.icon className="h-[18px] w-[18px] shrink-0" />
             <span className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="flex-1">{item.label}</span>
+              <span className="flex-1">{t(item.labelKey)}</span>
               <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">
-                Admin
+                {t('common.adminBadge')}
               </span>
             </span>
           </NavLink>
@@ -94,6 +98,7 @@ function SidebarBody() {
   const { user, logout } = useAuth();
   const { openPricing } = usePricingDialog();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const handleLogout = () => {
     logout();
@@ -106,7 +111,7 @@ function SidebarBody() {
         <span className="side-icon-slot">
           <item.icon className="side-icon" strokeWidth={1.5} />
         </span>
-        <span className="side-tooltip" aria-hidden="true">{item.label}</span>
+        <span className="side-tooltip" aria-hidden="true">{t(item.labelKey)}</span>
       </>
     );
 
@@ -117,7 +122,7 @@ function SidebarBody() {
           variant="icon"
           size="icon"
           onClick={openPricing}
-          aria-label={item.label}
+          aria-label={t(item.labelKey)}
           className="side-item !bg-transparent !p-0"
           contentClassName="!size-8 !min-h-8"
         >
@@ -127,7 +132,7 @@ function SidebarBody() {
     }
 
     return (
-      <NavLink key={item.path} to={item.path} aria-label={item.label} className="side-item">
+      <NavLink key={item.path} to={item.path} aria-label={t(item.labelKey)} className="side-item">
         {content}
       </NavLink>
     );
@@ -155,7 +160,7 @@ function SidebarBody() {
               </AvatarFallback>
             </Avatar>
           </span>
-          <span className="side-tooltip" aria-hidden="true">{user?.name || 'User'}</span>
+          <span className="side-tooltip" aria-hidden="true">{user?.name || t('common.user')}</span>
         </div>
 
         {/* Déconnexion */}
@@ -163,14 +168,14 @@ function SidebarBody() {
           variant="icon"
           size="icon"
           onClick={handleLogout}
-          aria-label="Sign out"
+          aria-label={t('common.signOut')}
           className="side-item !bg-transparent !p-0"
           contentClassName="!size-8 !min-h-8"
         >
           <span className="side-icon-slot">
             <LogOut className="side-icon" strokeWidth={1.5} />
           </span>
-          <span className="side-tooltip" aria-hidden="true">Sign out</span>
+          <span className="side-tooltip" aria-hidden="true">{t('common.signOut')}</span>
         </TextureButton>
       </div>
     </div>
@@ -195,9 +200,11 @@ function LayoutShell() {
   const { credits, sessionStatus } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { locale } = useLocalePreference();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isElectron] = useState(() => getElectronIpc() !== null);
-  const pageTitle = getPageTitle(location.pathname);
+  const pageTitle = getPageTitle(location.pathname, t);
   const isStudio =
     location.pathname === '/' || location.pathname === ROUTES.PROTECTED.DASHBOARD;
 
@@ -224,7 +231,7 @@ function LayoutShell() {
               <TextureButton
                 variant="icon"
                 size="icon"
-                aria-label="Menu"
+                aria-label={t('common.menu')}
                 className="app-region-no-drag md:hidden"
               >
                 <Menu className="size-4" strokeWidth={1.5} />
@@ -271,19 +278,19 @@ function LayoutShell() {
                 live ? 'text-red-400' : 'text-muted-foreground'
               }`}
             >
-              {sessionStatus}
+              {live ? t('common.live') : t('common.idle')}
             </span>
           </div>
 
           {/* Crédits */}
           <NavLink
             to={ROUTES.PROTECTED.WALLET}
-            title="Credits"
+            title={t('common.credits')}
             className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:text-blue-300"
           >
             <Coins className="h-3.5 w-3.5 text-blue-400" />
             <span className="text-sm font-bold tabular-nums text-foreground">
-              <AnimatedNumber value={Math.round(credits)} />
+              <AnimatedNumber value={Math.round(credits)} format={(n) => formatCredits(n, locale)} />
             </span>
           </NavLink>
 
@@ -293,7 +300,7 @@ function LayoutShell() {
               className="size-7"
               disableGlow
               strength={0.45}
-              aria-label="Account menu"
+              aria-label={t('common.accountMenu')}
             >
               <Avatar className="h-7 w-7">
                 <AvatarFallback className="bg-accent text-[11px] font-semibold text-foreground">
@@ -304,7 +311,7 @@ function LayoutShell() {
             <div className="invisible absolute right-0 top-full z-50 mt-2 w-56 rounded-xl bg-popover py-1.5 opacity-0 shadow-surface transition-all duration-200 group-hover:visible group-hover:opacity-100">
               <div className="px-4 py-3">
                 <p className="truncate text-sm font-semibold text-foreground">
-                  {user?.name || 'User'}
+                  {user?.name || t('common.user')}
                 </p>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">{user?.email || ''}</p>
               </div>
@@ -316,7 +323,7 @@ function LayoutShell() {
                 contentClassName="justify-start"
               >
                 <LogOut className="h-4 w-4" />
-                Sign out
+                {t('common.signOut')}
               </TextureButton>
             </div>
           </div>
@@ -327,8 +334,8 @@ function LayoutShell() {
               <TextureButton
                 variant="icon"
                 size="icon"
-                title="Minimize"
-                aria-label="Minimize"
+                title={t('common.minimize')}
+                aria-label={t('common.minimize')}
                 onClick={() => handleWindowControl('minimize')}
                 className="rounded-none !bg-transparent"
                 contentClassName="rounded-none !bg-transparent"
@@ -338,8 +345,8 @@ function LayoutShell() {
               <TextureButton
                 variant="icon"
                 size="icon"
-                title="Maximize"
-                aria-label="Maximize"
+                title={t('common.maximize')}
+                aria-label={t('common.maximize')}
                 onClick={() => handleWindowControl('maximize')}
                 className="rounded-none !bg-transparent"
                 contentClassName="rounded-none !bg-transparent"
@@ -349,8 +356,8 @@ function LayoutShell() {
               <TextureButton
                 variant="destructive"
                 size="icon"
-                title="Close"
-                aria-label="Close"
+                title={t('common.close')}
+                aria-label={t('common.close')}
                 onClick={() => handleWindowControl('close')}
                 className="rounded-none !bg-transparent"
                 contentClassName="rounded-none !bg-transparent text-muted-foreground hover:!bg-red-500 hover:text-white"

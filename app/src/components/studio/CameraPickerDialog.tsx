@@ -1,5 +1,6 @@
 // CameraPickerDialog — adapted from fxswap37 (preview + physical-only list).
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Video, X } from 'lucide-react';
 import { CosmicButton } from '@/components/ui/cosmic-button';
 import { MetalIconButton } from '@/components/ui/metal-button';
@@ -26,6 +27,7 @@ export function CameraPickerDialog({
   onConfirm: (device: CameraDeviceOption) => void;
   initialDeviceId?: string | null;
 }) {
+  const { t } = useTranslation();
   const [cameras, setCameras] = useState<CameraDeviceOption[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listing, setListing] = useState(false);
@@ -164,17 +166,17 @@ export function CameraPickerDialog({
         <div className="flex items-center justify-between px-5 py-4">
           <div>
             <h2 id="camera-picker-title" className="text-base font-semibold text-foreground">
-              Choose camera
+              {t('studio.chooseCamera')}
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Preview before you go live. Virtual outputs are hidden.
+              {t('studio.cameraPickerSubtitle')}
             </p>
           </div>
           <MetalIconButton
             variant="ghost"
             strength={0.4}
             disableGlow
-            aria-label="Close"
+            aria-label={t('common.close')}
             onClick={onClose}
           >
             <X className="size-4" />
@@ -183,11 +185,11 @@ export function CameraPickerDialog({
 
         <div className="grid gap-5 px-5 pb-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           <div className="min-h-[200px]">
-            <p className="kpi-label">Physical cameras</p>
-            {listing && <p className="mt-3 text-sm text-muted-foreground">Scanning…</p>}
+            <p className="kpi-label">{t('studio.physicalCameras')}</p>
+            {listing && <p className="mt-3 text-sm text-muted-foreground">{t('studio.scanning')}</p>}
             {!listing && !cameras.length && (
               <p className="mt-3 text-sm text-muted-foreground">
-                No camera found. Check Windows privacy settings.
+                {t('studio.noCameraFound')}
               </p>
             )}
             <ul className="mt-3 space-y-1">
@@ -216,12 +218,12 @@ export function CameraPickerDialog({
               disabled={listing}
               className="mt-3"
             >
-              Refresh list
+              {t('studio.refreshList')}
             </TextureButton>
           </div>
 
           <div>
-            <p className="kpi-label">Preview</p>
+            <p className="kpi-label">{t('studio.previewLabel')}</p>
             <div className="relative mt-3 aspect-video overflow-hidden rounded-xl border border-border bg-black">
               <video
                 ref={videoRef}
@@ -234,13 +236,13 @@ export function CameraPickerDialog({
               />
               {!selectedId && !previewError && !previewLoading && (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-white/50">
-                  Select a camera
+                  {t('studio.selectACamera')}
                 </div>
               )}
               {previewLoading && !previewError && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70">
                   <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500/40 border-t-blue-400" />
-                  <p className="text-sm text-white/80">Opening camera…</p>
+                  <p className="text-sm text-white/80">{t('studio.openingCamera')}</p>
                 </div>
               )}
               {previewError && (
@@ -251,7 +253,7 @@ export function CameraPickerDialog({
             </div>
             {selected && (
               <p className="mt-2 truncate text-xs text-muted-foreground">
-                {previewLoading ? 'Connecting…' : selected.label}
+                {previewLoading ? t('studio.connectingPro') : selected.label}
               </p>
             )}
           </div>
@@ -266,7 +268,7 @@ export function CameraPickerDialog({
             variant="minimal"
             onClick={onClose}
           >
-            Cancel
+            {t('common.cancel')}
           </TextureButton>
           <CosmicButton
             as="button"
@@ -275,7 +277,7 @@ export function CameraPickerDialog({
             className="min-h-9"
             contentClassName="min-h-8 px-4 py-1"
           >
-            {previewLoading ? 'Opening…' : 'Use this camera'}
+            {previewLoading ? t('studio.opening') : t('studio.useThisCamera')}
           </CosmicButton>
         </div>
       </TextureCard>

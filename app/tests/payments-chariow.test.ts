@@ -235,18 +235,46 @@ describe('wallet checkout UI contract', () => {
     const pricing = await read('app/src/components/PricingDialog.tsx');
     const chariow = await read('app/src/components/ChariowCheckoutModal.tsx');
     const success = await read('app/src/pages/PaymentSuccess.tsx');
-    expect(pricing).toContain('Cameroon — Mobile Money');
-    expect(pricing).toContain('International — Card');
-    expect(pricing).toContain('priceXAF.toLocaleString()} XAF');
-    expect(pricing).toContain('priceUSD.toLocaleString()} USD');
-    expect(pricing).toContain('formatDuration(plan.credits, 2)');
-    expect(pricing).toContain('formatDuration(plan.credits, 80)');
+    const en = await read('app/src/i18n/resources/en.ts');
+    expect(pricing).toContain("t('payments.cameroonMobile')");
+    expect(pricing).toContain("t('payments.internationalCard')");
+    expect(pricing).toContain("formatCurrency(plan.priceXAF, 'XAF', locale)");
+    expect(pricing).toContain("formatCurrency(plan.priceUSD, 'USD', locale)");
+    expect(pricing).toContain('formatDurationFromCredits(plan.credits, 2, locale)');
+    expect(pricing).toContain('formatDurationFromCredits(plan.credits, 80, locale)');
     expect(pricing).toContain('chariow-disabled-message');
-    expect(pricing).toContain('not a PRO licence');
+    expect(pricing).toContain("t('payments.packsIntro')");
+    expect(en).toContain('not a PRO licence');
     expect(chariow).toContain('isValidPhoneNumber');
-    expect(chariow).toContain('Never enter card numbers');
-    expect(success).toContain('Verification in progress');
+    expect(chariow).toContain("t('payments.phoneHint')");
+    expect(en).toContain('Never enter card numbers');
+    expect(success).toContain("t('payments.verifying')");
     expect(success).toContain('fulfilment_failed');
-    expect(success).toContain('never credits your wallet directly');
+    expect(success).toContain("t('payments.footerNote')");
+    expect(en).toContain('never credits your wallet directly');
+  });
+});
+
+describe('wallet bodyParser false non-regression', () => {
+  test('multiplexed POST and GET wallet actions still parse with bodyParser false', async () => {
+    const wallet = await read('app/api/wallet.ts');
+    const fapshi = await read('app/server/fapshi-init.ts');
+    const chariow = await read('app/server/chariow-init.ts');
+    const pulse = await read('app/server/chariow-pulse.ts');
+    const local = await read('app/scripts/local-api-server.mjs');
+
+    expect(wallet).toContain('bodyParser: false');
+    expect(wallet).toContain("action === 'fapshi-init'");
+    expect(wallet).toContain("action === 'chariow-init'");
+    expect(wallet).toContain("action === 'chariow-pulse'");
+    expect(wallet).toContain("action === 'payment-status'");
+    expect(wallet).toContain("action === 'catalog'");
+    expect(wallet).toContain("action === 'payment-profile'");
+    expect(wallet).toContain('ensureJsonBody');
+    expect(wallet).toContain('JSON.parse(raw.toString');
+    expect(fapshi).toContain('req.body?.packageId');
+    expect(chariow).toContain('req.body?.packageId');
+    expect(pulse).toContain('rawBody');
+    expect(local).toContain('rawBody');
   });
 });

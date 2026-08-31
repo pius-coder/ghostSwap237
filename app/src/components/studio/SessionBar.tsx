@@ -1,6 +1,7 @@
 // SessionBar — transport controls under the Stage (fxswap37 pattern,
 // Henshin dark+blue tokens). Fast = Reactor X2, PRO = fal.ai Lucy 2.5.
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeftRight, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Video, X } from 'lucide-react';
 import { TextureCard } from '@/components/ui/texture-card';
 import { TextureButton } from '@/components/ui/texture-button';
@@ -8,13 +9,6 @@ import { usePricingDialog } from '@/hooks/usePricingDialog';
 import { useSessionCommands } from '@/lib/session/sessionContext';
 import type { Persona } from '@/lib/personas';
 import type { LiveProvider } from '@/lib/liveProvider';
-
-const STATUS_PILL: Record<string, { dotClass: string; label: string }> = {
-  disconnected: { dotClass: 'bg-muted-foreground', label: 'Idle' },
-  connecting: { dotClass: 'animate-pulse bg-blue-400', label: 'Starting…' },
-  waiting: { dotClass: 'animate-pulse bg-blue-400', label: 'Starting…' },
-  ready: { dotClass: 'bg-blue-400', label: 'Connected' },
-};
 
 const GHOST_MODE_KEY = 'henshin.ghostMode.v1';
 
@@ -63,13 +57,23 @@ export function SessionBar({
   busy: boolean;
   onError: (message: string | null) => void;
 }) {
+  const { t } = useTranslation();
   const session = useSessionCommands();
   const { openPricing } = usePricingDialog();
   const { status } = session;
 
+  const statusPill =
+    status === 'disconnected'
+      ? { dotClass: 'bg-muted-foreground', label: t('studio.idle') }
+      : status === 'connecting' || status === 'waiting'
+        ? { dotClass: 'animate-pulse bg-blue-400', label: t('studio.starting') }
+        : status === 'ready'
+          ? { dotClass: 'bg-blue-400', label: t('studio.connected') }
+          : { dotClass: 'bg-muted-foreground', label: t('studio.idle') };
+
   const tone = status === 'ready' && session.metadata.generating
-    ? { dotClass: 'animate-pulse bg-emerald-500', label: 'Live' }
-    : STATUS_PILL[status] ?? STATUS_PILL.disconnected;
+    ? { dotClass: 'animate-pulse bg-emerald-500', label: t('studio.live') }
+    : statusPill;
   const idle = status === 'disconnected';
   const starting = status === 'connecting' || status === 'waiting';
   const [ghost, setGhost] = useState(loadGhostMode);
@@ -108,10 +112,10 @@ export function SessionBar({
   const canStart =
     cameraOn && Boolean(activePersona?.imageUrl) && idle && !busy;
   const startHint = !cameraOn
-    ? 'Choose a camera first'
+    ? t('studio.chooseCameraFirst')
     : !activePersona?.imageUrl
-      ? 'Choose a persona first'
-      : 'Start session';
+      ? t('studio.choosePersonaFirst')
+      : t('studio.startSession');
   const metadataLabel = session.metadata.generating
     ? [
         session.metadata.outputWidth && session.metadata.outputHeight
@@ -123,6 +127,7 @@ export function SessionBar({
         .join(' · ')
     : null;
   const banner = session.lastError?.message;
+  const noCredits = remainingCreditsLabel === 'No credits' || remainingCreditsLabel === t('studio.noCredits');
 
   return (
     <div className="shrink-0">
@@ -131,8 +136,8 @@ export function SessionBar({
           <TextureButton
             variant="icon"
             size="icon"
-            aria-label={panelOpen ? 'Collapse persona panel' : 'Expand persona panel'}
-            title={panelOpen ? 'Collapse persona panel' : 'Expand persona panel'}
+            aria-label={panelOpen ? t('studio.collapsePanel') : t('studio.expandPanel')}
+            title={panelOpen ? t('studio.collapsePanel') : t('studio.expandPanel')}
             onClick={onTogglePanel}
             className="inline-flex"
           >
@@ -157,9 +162,9 @@ export function SessionBar({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {remainingCreditsLabel === 'No credits' ? (
+          {noCredits ? (
             <TextureButton variant="destructive" size="sm" onClick={openPricing}>
-              Add credits
+              {t('studio.addCredits')}
             </TextureButton>
           ) : remainingCreditsLabel ? (
             <span className={`hidden font-mono text-[10px] uppercase tracking-wide md:inline ${
@@ -170,29 +175,28 @@ export function SessionBar({
           ) : null}
           {currentUsage && status !== 'disconnected' && (
             <span className="hidden font-mono text-[10px] uppercase tracking-wide text-blue-300 lg:inline">
-              {currentUsage.credits} cr used · {currentUsage.seconds}s
+              {t('studio.usageLine', { credits: currentUsage.credits, seconds: currentUsage.seconds })}
             </span>
           )}
 
-          {/* Engine switch. PRO access is enforced before this callback changes provider. */}
           <TextureButton
             variant="minimal"
             size="sm"
             disabled={!idle}
             onClick={() => onLiveProviderChange(liveProvider === 'pro' ? 'fast' : 'pro')}
-            aria-label={liveProvider === 'pro' ? 'Switch to Fast' : 'Switch to Pro'}
+            aria-label={liveProvider === 'pro' ? t('studio.switchToFast') : t('studio.switchToPro')}
             title={
               idle
                 ? liveProvider === 'pro'
-                  ? 'Swap to Fast (Reactor X2)'
-                  : 'Switch to PRO (fal.ai Lucy 2.5)'
-                : 'Stop the session before swapping'
+                  ? t('studio.swapToFast')
+                  : t('studio.swapToPro')
+                : t('studio.stopBeforeSwap')
             }
             contentClassName="gap-1.5 px-2 text-xs tracking-tight"
           >
             <ArrowLeftRight className="size-3 text-muted-foreground" />
             <span className={liveProvider === 'fast' ? 'text-blue-300' : 'text-foreground'}>
-              {liveProvider === 'fast' ? 'Fast · X2' : 'PRO · Lucy 2.5'}
+              {liveProvider === 'fast' ? t('studio.fast') : t('studio.proLucyFull')}
             </span>
           </TextureButton>
 
@@ -200,12 +204,12 @@ export function SessionBar({
             variant="secondary"
             onClick={onOpenCameraPicker}
             disabled={!idle || busy}
-            title={cameraOn ? cameraLabel || 'Change camera' : 'Choose camera'}
+            title={cameraOn ? cameraLabel || t('studio.changeCamera') : t('studio.chooseCamera')}
             className="max-w-[170px]"
             contentClassName="gap-2 px-3 text-[13px]"
           >
             <Video className="size-3.5 shrink-0" />
-            <span className="truncate">{cameraOn ? cameraLabel || 'Camera' : 'Choose camera'}</span>
+            <span className="truncate">{cameraOn ? cameraLabel || t('studio.camera') : t('studio.chooseCamera')}</span>
           </TextureButton>
 
           {idle ? (
@@ -216,7 +220,7 @@ export function SessionBar({
               title={startHint}
               contentClassName="px-4 text-[13px]"
             >
-              {busy ? 'Starting…' : 'Start'}
+              {busy ? t('studio.starting') : t('studio.start')}
             </TextureButton>
           ) : (
             <TextureButton
@@ -225,7 +229,7 @@ export function SessionBar({
               onClick={onStop}
             >
               <X className="h-3.5 w-3.5" />
-              {busy ? 'Stopping…' : 'Stop session'}
+              {busy ? t('studio.stopping') : t('studio.stopSession')}
             </TextureButton>
           )}
 
@@ -233,9 +237,9 @@ export function SessionBar({
             <TextureButton
               variant="icon"
               size="icon"
-              aria-label="More"
+              aria-label={t('common.more')}
               aria-expanded={moreOpen}
-              title="More"
+              title={t('common.more')}
               onClick={() => setMoreOpen((v) => !v)}
             >
               <MoreHorizontal className="size-4" />
@@ -255,7 +259,7 @@ export function SessionBar({
                     });
                   }}
                 >
-                  Reset generation
+                  {t('studio.resetGeneration')}
                 </MoreItem>
                 <MoreItem
                   onClick={() => {
@@ -263,10 +267,10 @@ export function SessionBar({
                     toggleGhost();
                   }}
                 >
-                  {ghost ? 'Disable Ghost Mode' : 'Enable Ghost Mode'}
+                  {ghost ? t('studio.disableGhost') : t('studio.enableGhost')}
                 </MoreItem>
                 <MoreItem onClick={onToggleObsPreview}>
-                  {obsActive ? 'Close OBS preview' : 'Open OBS preview'}
+                  {obsActive ? t('studio.closeObs') : t('studio.openObs')}
                 </MoreItem>
                 <MoreItem
                   onClick={() => {
@@ -274,7 +278,7 @@ export function SessionBar({
                     onOpenSessionHistory();
                   }}
                 >
-                  Session history
+                  {t('studio.history')}
                 </MoreItem>
               </TextureCard>
             )}

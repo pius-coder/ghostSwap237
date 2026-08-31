@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ShieldAlert, Download, Rocket } from 'lucide-react';
 import { CosmicButton } from '@/components/ui/cosmic-button';
 import { TextureButton } from '@/components/ui/texture-button';
@@ -14,12 +15,12 @@ import { subscribeToDesktopUpdateState, installDesktopUpdate } from '@/lib/deskt
 import { toast } from 'sonner';
 
 export function UpdateModal() {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToDesktopUpdateState((state) => {
-      // Show modal when the update is successfully downloaded and waiting to install
       if (state.status === 'downloaded' && !isInstalling) {
         setIsOpen(true);
       }
@@ -33,7 +34,7 @@ export function UpdateModal() {
       setIsInstalling(true);
       await installDesktopUpdate();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to install update');
+      toast.error(error instanceof Error ? error.message : t('updates.installFailed'));
       setIsInstalling(false);
     }
   };
@@ -45,19 +46,19 @@ export function UpdateModal() {
           <div className="mx-auto w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center mb-4">
             <Download className="w-6 h-6 text-blue-400" />
           </div>
-          <DialogTitle className="text-xl text-center text-foreground font-bold tracking-tight">Update Available</DialogTitle>
+          <DialogTitle className="text-xl text-center text-foreground font-bold tracking-tight">{t('updates.available')}</DialogTitle>
           <DialogDescription className="text-center text-muted-foreground pt-2">
-            A new version of Henshin 変身 is ready to install!
+            {t('updates.readyBody')}
           </DialogDescription>
         </DialogHeader>
         
         <div className="bg-panel border border-blue-500/20 rounded-lg p-4 my-2 flex items-start gap-3">
           <ShieldAlert className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
           <div className="text-sm text-muted-foreground">
-            <p className="font-semibold text-foreground mb-1">Windows Defender Note</p>
-            If Windows SmartScreen pops up during installation, safely click:
+            <p className="font-semibold text-foreground mb-1">{t('updates.defenderNote')}</p>
+            {t('updates.defenderBody')}
             <br />
-            <span className="font-medium text-blue-400">More Info</span> → <span className="font-medium text-blue-400">Run Anyway</span>
+            <span className="font-medium text-blue-400">{t('updates.moreInfo')}</span> → <span className="font-medium text-blue-400">{t('updates.runAnyway')}</span>
           </div>
         </div>
 
@@ -67,7 +68,7 @@ export function UpdateModal() {
             onClick={() => setIsOpen(false)}
             className="sm:w-1/2"
           >
-            Later
+            {t('updates.later')}
           </TextureButton>
           <CosmicButton
             as="button"
@@ -76,11 +77,11 @@ export function UpdateModal() {
             className="sm:w-1/2"
           >
             {isInstalling ? (
-              'Launching...'
+              t('updates.launching')
             ) : (
               <>
                 <Rocket className="w-4 h-4 mr-2" />
-                Install Update
+                {t('updates.install')}
               </>
             )}
           </CosmicButton>

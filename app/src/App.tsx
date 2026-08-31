@@ -8,11 +8,12 @@ import { Toaster } from '@/components/ui/sonner';
 import Layout from '@/components/Layout';
 import LoadingScreen from '@/components/LoadingScreen';
 import { ROUTES } from '@/lib/routes';
-
-const Login = lazy(() => import('@/pages/Login'));
 import { UpdateModal } from '@/components/UpdateModal';
 import { LegalGate } from '@/components/LegalGate';
 import { LaunchPrivacyNotice } from '@/components/LaunchPrivacyNotice';
+import { LocaleProvider } from '@/i18n/LocaleContext';
+
+const Login = lazy(() => import('@/pages/Login'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const PreviewWindow = lazy(() => import('@/pages/PreviewWindow'));
 const Wallet = lazy(() => import('@/pages/Wallet'));
@@ -27,62 +28,58 @@ function App() {
     <ErrorBoundary>
       <HashRouter>
         <AuthProvider>
-          <AppProvider>
-            <LegalGate>
-              <Suspense fallback={<LoadingScreen />}>
-                <Routes>
-                  <Route
-                    path={ROUTES.PUBLIC.LOGIN}
-                    element={
-                      <PublicRoute>
-                        <Login />
-                      </PublicRoute>
-                    }
-                  />
-                  <Route
-                    path={ROUTES.PUBLIC.SIGNUP}
-                    element={
-                      <PublicRoute>
-                        <Login />
-                      </PublicRoute>
-                    }
-                  />
-                  <Route
-                    path={ROUTES.PUBLIC.PAYMENT_SUCCESS}
-                    element={<PaymentSuccess />}
-                  />
-                  <Route path={ROUTES.PUBLIC.AUTH_CALLBACK} element={<AuthCallback />} />
-                  <Route path="/preview" element={<PreviewWindow />} />
-                  <Route
-                    path="/wallet"
-                    element={<Navigate to={ROUTES.PROTECTED.WALLET} replace />}
-                  />
-                  <Route
-                    path="/"
-                    element={
-                      <ProtectedRoute>
-                        <Layout />
-                      </ProtectedRoute>
-                    }
-                  >
-                    <Route index element={<Dashboard />} />
-                    <Route path={ROUTES.PROTECTED.DASHBOARD} element={<Dashboard />} />
-                    <Route path={ROUTES.PROTECTED.WALLET} element={<Wallet />} />
+          <LocaleProvider>
+            <AppProvider>
+              <LegalGate>
+                <Suspense fallback={<LoadingScreen />}>
+                  <Routes>
                     <Route
-                      path={ROUTES.PROTECTED.SUBSCRIPTION}
-                      element={<Navigate to={`${ROUTES.PROTECTED.WALLET}?buy=1`} replace />}
+                      path={ROUTES.PUBLIC.LOGIN}
+                      element={
+                        <PublicRoute>
+                          <Login />
+                        </PublicRoute>
+                      }
                     />
-                    <Route path={ROUTES.PROTECTED.SETTINGS} element={<Settings />} />
-                    <Route path={ROUTES.PROTECTED.ADMIN_DASHBOARD} element={<AdminDashboard />} />
-                  </Route>
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-              <Toaster />
-              <UpdateModal />
-              <LaunchPrivacyNotice />
-            </LegalGate>
+                    <Route
+                      path={ROUTES.PUBLIC.SIGNUP}
+                      element={
+                        <PublicRoute>
+                          <Login />
+                        </PublicRoute>
+                      }
+                    />
+                    <Route path={ROUTES.PUBLIC.PAYMENT_SUCCESS} element={<PaymentSuccess />} />
+                    <Route path={ROUTES.PUBLIC.AUTH_CALLBACK} element={<AuthCallback />} />
+                    <Route path="/preview" element={<PreviewWindow />} />
+                    <Route path="/wallet" element={<Navigate to={ROUTES.PROTECTED.WALLET} replace />} />
+                    <Route
+                      path="/"
+                      element={
+                        <ProtectedRoute>
+                          <Layout />
+                        </ProtectedRoute>
+                      }
+                    >
+                      <Route index element={<Dashboard />} />
+                      <Route path={ROUTES.PROTECTED.DASHBOARD} element={<Dashboard />} />
+                      <Route path={ROUTES.PROTECTED.WALLET} element={<Wallet />} />
+                      <Route
+                        path={ROUTES.PROTECTED.SUBSCRIPTION}
+                        element={<Navigate to={`${ROUTES.PROTECTED.WALLET}?buy=1`} replace />}
+                      />
+                      <Route path={ROUTES.PROTECTED.SETTINGS} element={<Settings />} />
+                      <Route path={ROUTES.PROTECTED.ADMIN_DASHBOARD} element={<AdminDashboard />} />
+                    </Route>
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
+                <Toaster />
+                <UpdateModal />
+                <LaunchPrivacyNotice />
+              </LegalGate>
             </AppProvider>
+          </LocaleProvider>
         </AuthProvider>
       </HashRouter>
     </ErrorBoundary>

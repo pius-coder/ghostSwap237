@@ -1,9 +1,12 @@
+import { useTranslation } from 'react-i18next';
+
 export default function LoadingScreen() {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
         <div className="w-12 h-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
       </div>
     </div>
   );

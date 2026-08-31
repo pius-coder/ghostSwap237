@@ -2,6 +2,7 @@ import { Component } from 'react';
 import type { ReactNode } from 'react';
 import { CosmicButton } from '@/components/ui/cosmic-button';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { i18n } from '@/i18n';
 
 interface Props {
   children: ReactNode;
@@ -40,16 +41,16 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="w-8 h-8 text-red-500" />
             </div>
-            <h1 className="text-2xl font-bold title-tight mb-2">Something went wrong</h1>
+            <h1 className="text-2xl font-bold title-tight mb-2">{i18n.t('errorBoundary.title')}</h1>
             <p className="text-muted-foreground mb-6">
-              {this.state.error?.message || 'An unexpected error occurred'}
+              {this.state.error?.message || i18n.t('errors.UNEXPECTED')}
             </p>
             <CosmicButton
               as="button"
               onClick={this.handleReload}
             >
               <RefreshCw className="w-4 h-4 mr-2" />
-              Reload Page
+              {i18n.t('errorBoundary.reload')}
             </CosmicButton>
           </div>
         </div>

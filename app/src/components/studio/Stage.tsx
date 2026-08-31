@@ -4,6 +4,7 @@
 // the stage (bounded) and can expand into a split view without remounting
 // the camera.
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X2MainVideoView } from '@reactor-models/x2';
 import { Pipette, SplitSquareHorizontal, X } from 'lucide-react';
 import { MetalIconButton } from '@/components/ui/metal-button';
@@ -13,28 +14,21 @@ import type { LiveProvider } from '@/lib/liveProvider';
 // Padding used to clamp the dragged PiP inside the stage.
 const PIP_PADDING = 8;
 
-// Status-aware idle copy for the placeholder.
-const PLACEHOLDER_COPY: Record<string, { title: string; subtitle: string }> = {
-  disconnected: {
-    title: 'Ready',
-    subtitle: 'Pick a camera and a persona, then press Start',
-  },
-  connecting: { title: 'Starting…', subtitle: 'Opening the session' },
-  waiting: {
-    title: 'Starting…',
-    subtitle: 'The model boots on first connect',
-  },
-  ready: { title: 'Live', subtitle: 'Generation is starting' },
-};
-
 function Placeholder({ provider }: { provider: LiveProvider }) {
+  const { t } = useTranslation();
   const { status } = useSessionCommands();
   const copy =
     provider === 'pro'
       ? status === 'disconnected'
-        ? { title: 'Ready', subtitle: 'Pick a persona, then press Start' }
-        : { title: 'Connecting…', subtitle: 'Opening fal.ai Lucy 2.5 PRO' }
-      : (PLACEHOLDER_COPY[status] ?? PLACEHOLDER_COPY.ready);
+        ? { title: t('studio.ready'), subtitle: t('studio.pickPersona') }
+        : { title: t('studio.connectingPro'), subtitle: t('studio.openingLucy') }
+      : status === 'disconnected'
+        ? { title: t('studio.ready'), subtitle: t('studio.pickCamera') }
+        : status === 'connecting'
+          ? { title: t('studio.starting'), subtitle: t('studio.openingSession') }
+          : status === 'waiting'
+            ? { title: t('studio.starting'), subtitle: t('studio.modelBoots') }
+            : { title: t('studio.live'), subtitle: t('studio.generationStarting') };
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 px-6 text-center transition-opacity duration-500">
       <div className="flex size-[38px] items-center justify-center overflow-hidden rounded-xl">
@@ -73,6 +67,7 @@ export function Stage({
   onTrack?: (track: MediaStreamTrack | null) => void;
   onStopCamera: () => void;
 }) {
+  const { t } = useTranslation();
   // true: original | edited side by side. false: floating draggable PiP.
   const [split, setSplit] = useState(false);
   // PiP offset in px inside the stage; null = default bottom-right corner.
@@ -177,7 +172,7 @@ export function Stage({
         )}
         {!generating && !proLive && <Placeholder provider={liveProvider} />}
         <span className="pointer-events-none absolute left-2 top-2 max-w-[40%] truncate rounded bg-black/70 px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-tight text-white/60">
-          {generating ? (activeLabel ?? 'edited') : 'edited'}
+          {generating ? (activeLabel ?? t('studio.edited')) : t('studio.edited')}
         </span>
       </div>
 
@@ -212,15 +207,15 @@ export function Stage({
           {/* Top strip (drag handle + view controls). */}
           <div className="absolute inset-x-0 top-0 z-10 flex h-8 items-center justify-between gap-1 bg-gradient-to-b from-black/60 to-transparent px-2">
             <span className="font-mono text-[10px] uppercase tracking-tight text-white/80">
-              {split ? 'original' : 'camera'}
+              {split ? t('studio.original') : t('studio.camera')}
             </span>
             <div className="flex items-center gap-1">
               <MetalIconButton
                 variant="ghost"
                 strength={0.35}
                 disableGlow
-                aria-label={split ? 'Back to picture-in-picture' : 'Open split view'}
-                title={split ? 'Back to picture-in-picture' : 'Open split view'}
+                aria-label={split ? t('studio.backToPip') : t('studio.openSplit')}
+                title={split ? t('studio.backToPip') : t('studio.openSplit')}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => setSplit((s) => !s)}
                 className="size-7 text-white/80 hover:text-white"
@@ -231,8 +226,8 @@ export function Stage({
                 variant="destructive"
                 strength={0.35}
                 disableGlow
-                aria-label="Stop camera"
-                title="Stop camera"
+                aria-label={t('studio.stopCamera')}
+                title={t('studio.stopCamera')}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={onStopCamera}
                 className="size-7 text-white/80 hover:text-white"

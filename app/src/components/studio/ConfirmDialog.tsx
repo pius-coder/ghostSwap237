@@ -1,4 +1,4 @@
-// ConfirmDialog — adapted from fxswap37 to the Henshin dark+blue tokens.
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { CosmicButton } from '@/components/ui/cosmic-button';
 import { MetalIconButton } from '@/components/ui/metal-button';
@@ -9,8 +9,8 @@ export function ConfirmDialog({
   open,
   title,
   body,
-  confirmLabel = 'Continue',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   busy = false,
   onConfirm,
   onClose,
@@ -24,7 +24,11 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   if (!open) return null;
+
+  const resolvedConfirm = confirmLabel ?? t('common.continue');
+  const resolvedCancel = cancelLabel ?? t('common.cancel');
 
   return (
     <div
@@ -48,7 +52,7 @@ export function ConfirmDialog({
             variant="ghost"
             strength={0.4}
             disableGlow
-            aria-label="Close"
+            aria-label={t('common.close')}
             disabled={busy}
             onClick={onClose}
           >
@@ -64,7 +68,7 @@ export function ConfirmDialog({
             disabled={busy}
             onClick={onClose}
           >
-            {cancelLabel}
+            {resolvedCancel}
           </TextureButton>
           <CosmicButton
             as="button"
@@ -73,7 +77,7 @@ export function ConfirmDialog({
             className="min-h-9"
             contentClassName="min-h-8 px-4 py-1"
           >
-            {busy ? 'Working…' : confirmLabel}
+            {busy ? t('common.working') : resolvedConfirm}
           </CosmicButton>
         </div>
       </TextureCard>

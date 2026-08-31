@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 function PreviewWindow() {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastStreamRef = useRef<MediaStream | null>(null);
   const [hasStream, setHasStream] = useState(false);
 
   useEffect(() => {
-    document.title = 'Henshin 変身 preview';
-  }, []);
+    document.title = t('preview.windowTitle');
+  }, [t]);
 
   useEffect(() => {
     const previewVideo = videoRef.current;
@@ -69,9 +71,9 @@ function PreviewWindow() {
       {!hasStream && (
         <div className="w-full h-full flex items-center justify-center bg-black text-center px-6">
           <div className="max-w-md">
-            <h1 className="text-white text-3xl font-semibold tracking-[0.08em] uppercase">Henshin 変身 preview</h1>
+            <h1 className="text-white text-3xl font-semibold tracking-[0.08em] uppercase">{t('preview.windowTitle')}</h1>
             <p className="mt-4 text-sm text-muted-foreground">
-              Waiting for the live output stream. Open this window from the dashboard OBS Preview button and start streaming.
+              {t('preview.waiting')}
             </p>
           </div>
         </div>

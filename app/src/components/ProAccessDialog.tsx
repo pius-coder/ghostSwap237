@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyRound, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -17,10 +18,11 @@ export function ProAccessDialog({
   onOpenChange: (open: boolean) => void;
   onRedeem: (code: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const phone = access.contactPhone || '237620124019';
-  const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent('Bonjour, je souhaite obtenir une licence Henshin PRO pour mon compte.')}`;
+  const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(t('pro.whatsappMessage'))}`;
 
   const activate = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -29,9 +31,9 @@ export function ProAccessDialog({
       await onRedeem(code);
       setCode('');
       onOpenChange(false);
-      toast.success('Henshin PRO is now active on this account.');
+      toast.success(t('pro.activated'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'PRO activation failed.');
+      toast.error(error instanceof Error ? error.message : t('pro.activateFailed'));
     } finally {
       setBusy(false);
     }
@@ -41,9 +43,9 @@ export function ProAccessDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><KeyRound className="size-5 text-blue-400" /> Unlock Henshin PRO</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><KeyRound className="size-5 text-blue-400" /> {t('pro.unlockTitle')}</DialogTitle>
           <DialogDescription>
-            Lucy 2.5 PRO requires a license assigned by administration and enough wallet credits.
+            {t('pro.unlockBody')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={activate} className="space-y-3">
@@ -56,11 +58,11 @@ export function ProAccessDialog({
             required
           />
           <TextureButton type="submit" variant="accent" disabled={busy} className="w-full">
-            {busy ? 'Activating...' : 'Activate license'}
+            {busy ? t('pro.activating') : t('pro.activate')}
           </TextureButton>
         </form>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" /> No license yet? <span className="h-px flex-1 bg-border" />
+          <span className="h-px flex-1 bg-border" /> {t('pro.noLicenseYet')} <span className="h-px flex-1 bg-border" />
         </div>
         <TextureButton
           type="button"
@@ -68,7 +70,7 @@ export function ProAccessDialog({
           className="w-full"
           onClick={() => window.open(whatsappUrl, '_blank', 'noopener,noreferrer')}
         >
-          <MessageCircle className="size-4" /> Contact administration on WhatsApp
+          <MessageCircle className="size-4" /> {t('pro.contactAdmin')}
         </TextureButton>
         <p className="text-center font-mono text-xs text-muted-foreground">+{phone}</p>
       </DialogContent>

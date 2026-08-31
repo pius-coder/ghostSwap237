@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, XCircle, Loader2, ArrowRight, Coins, ShieldCheck, Clock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,6 +11,8 @@ import { TextureButton } from '@/components/ui/texture-button';
 import { useApp } from '@/context/AppContext';
 import { apiFetch } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
+import { formatCredits, formatCurrency, formatNumber } from '@/i18n/format';
+import { useLocalePreference } from '@/i18n/useLocalePreference';
 
 type VerifyState =
   | 'verifying'
@@ -34,12 +37,14 @@ interface StatusResponse {
 }
 
 function PaymentSuccess() {
+  const { t } = useTranslation();
+  const { locale } = useLocalePreference();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { refreshCredits } = useApp();
 
   const [state, setState] = useState<VerifyState>('verifying');
-  const [message, setMessage] = useState('Checking your payment...');
+  const [message, setMessage] = useState(() => t('payments.checkingPayment'));
   const [paidAmount, setPaidAmount] = useState<number | null>(null);
   const [paidCurrency, setPaidCurrency] = useState<string>('XAF');
   const [paidCredits, setPaidCredits] = useState<number | null>(null);
@@ -56,20 +61,20 @@ function PaymentSuccess() {
     const checkPayment = async () => {
       try {
         setState('verifying');
-        setMessage('Verification in progress…');
+        setMessage(t('payments.verifying'));
 
         const {
           data: { session },
           error: sessionError,
         } = await supabase.auth.getSession();
         if (sessionError || !session?.access_token) {
-          throw new Error('Your session has expired. Please sign in again.');
+          throw new Error(t('auth.sessionExpired'));
         }
 
         const reference = paymentId || transactionId;
         if (!reference) {
           setState('failed');
-          setMessage('Missing transaction information. Please contact support.');
+          setMessage(t('payments.missingTransaction'));
           return;
         }
 
@@ -91,10 +96,10 @@ function PaymentSuccess() {
           if (!res.ok) {
             if (res.status === 404) {
               setState('failed');
-              setMessage(data.error || 'This payment could not be found. Please contact support.');
+              setMessage(data.error || t('payments.paymentNotFound'));
               return;
             }
-            throw new Error(data.error || 'Unable to check the payment.');
+            throw new Error(data.error || t('payments.unableToCheck'));
           }
 
           setPaidAmount(Number.isFinite(data.amount) ? Number(data.amount) : null);
@@ -103,7 +108,7 @@ function PaymentSuccess() {
 
           if (data.paymentStatus === 'expired' || data.providerStatus === 'EXPIRED') {
             setState('expired');
-            setMessage('The payment link expired before the payment was completed.');
+            setMessage(t('payments.linkExpired'));
             return;
           }
 
@@ -113,8 +118,8 @@ function PaymentSuccess() {
             data.providerStatus === 'CANCELLED'
           ) {
             setState('failed');
-            setMessage('The payment failed or was declined. No credits were added.');
-            toast.error('Payment failed');
+            setMessage(t('payments.paymentFailedDetail'));
+            toast.error(t('payments.failed'));
             return;
           }
 
@@ -125,8 +130,10 @@ function PaymentSuccess() {
               console.warn('Failed to refresh credits:', syncError);
             }
             setState('success');
-            setMessage(`${(data.credits ?? 0).toLocaleString()} credits have been added to your account.`);
-            toast.success('Payment confirmed! Credits added.');
+            setMessage(t('payments.creditsDelivered', {
+              count: formatCredits(data.credits ?? 0, locale),
+            }));
+            toast.success(t('payments.paymentConfirmedToast'));
             return;
           }
 
@@ -137,10 +144,7 @@ function PaymentSuccess() {
             data.fulfilmentStatus === 'failed'
           ) {
             setState('fulfilment_failed');
-            setMessage(
-              data.failureReason ||
-                'Payment was confirmed but credit delivery failed. Support has been alerted.',
-            );
+            setMessage(data.failureReason || t('payments.fulfilmentFailedDetail'));
             return;
           }
 
@@ -150,9 +154,7 @@ function PaymentSuccess() {
             data.providerStatus === 'COMPLETED'
           ) {
             setState('fulfilment_failed');
-            setMessage(
-              'Payment confirmed. Automatic credit delivery is still pending; we will keep retrying.',
-            );
+            setMessage(t('payments.fulfilmentPending'));
             if (attempt < MAX_STATUS_CHECKS - 1) {
               await new Promise<void>((resolve) => {
                 const timer = window.setTimeout(resolve, STATUS_POLL_INTERVAL_MS);
@@ -169,7 +171,7 @@ function PaymentSuccess() {
 
           if (attempt < MAX_STATUS_CHECKS - 1) {
             setState('pending');
-            setMessage('Payment is still pending. We will check again shortly.');
+            setMessage(t('payments.stillPending'));
             await new Promise<void>((resolve) => {
               const timer = window.setTimeout(resolve, STATUS_POLL_INTERVAL_MS);
               controller.signal.addEventListener('abort', () => {
@@ -182,7 +184,7 @@ function PaymentSuccess() {
         }
 
         setState('pending');
-        setMessage('Payment is still pending. You can check again without starting a new payment.');
+        setMessage(t('payments.stillPendingManual'));
       } catch (error) {
         if (controller.signal.aborted) return;
         setState('failed');
@@ -190,22 +192,28 @@ function PaymentSuccess() {
         setMessage(
           error instanceof Error && error.message
             ? error.message
-            : 'Unable to check the payment. Please contact support if you were charged.',
+            : t('payments.checkFailedSupport'),
         );
       }
     };
 
     void checkPayment();
     return () => controller.abort();
-  }, [checkRequest, paymentId, paymentProvider, refreshCredits, transactionId]);
+  }, [checkRequest, locale, paymentId, paymentProvider, refreshCredits, t, transactionId]);
 
   const title =
-    state === 'verifying' ? 'Verification in progress'
-      : state === 'pending' ? 'Payment pending'
-        : state === 'success' ? 'Payment confirmed and credits delivered'
-          : state === 'fulfilment_failed' ? 'Payment confirmed — delivery issue'
-            : state === 'expired' ? 'Payment expired'
-              : 'Payment failed';
+    state === 'verifying' ? t('payments.verifying')
+      : state === 'pending' ? t('payments.pending')
+        : state === 'success' ? t('payments.success')
+          : state === 'fulfilment_failed' ? t('payments.fulfilmentFailed')
+            : state === 'expired' ? t('payments.expired')
+              : t('payments.failed');
+
+  const amountLabel = paidAmount != null
+    ? (paidCurrency === 'XAF' || paidCurrency === 'USD'
+        ? formatCurrency(paidAmount, paidCurrency, locale)
+        : `${formatNumber(paidAmount, locale)} ${paidCurrency}`)
+    : null;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -242,16 +250,17 @@ function PaymentSuccess() {
               {paidCredits && (
                 <>
                   <p className="text-xs text-blue-300/70 mb-1">
-                    {state === 'success' ? 'Credits added' : 'Credits expected'}
+                    {state === 'success' ? t('payments.creditsAdded') : t('payments.creditsExpected')}
                   </p>
                   <p className="text-3xl font-bold text-blue-300">
-                    <AnimatedNumber value={paidCredits} /> credits
+                    <AnimatedNumber value={paidCredits} format={(n) => formatCredits(n, locale)} />{' '}
+                    {t('payments.creditsUnit')}
                   </p>
                 </>
               )}
-              {paidAmount != null && (
+              {amountLabel && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Amount: {paidAmount.toLocaleString()} {paidCurrency === 'XAF' ? 'FCFA' : paidCurrency}
+                  {t('payments.amountPaid', { amount: amountLabel })}
                 </p>
               )}
             </div>
@@ -266,7 +275,7 @@ function PaymentSuccess() {
                   onClick={() => setCheckRequest((request) => request + 1)}
                   className="w-full"
                 >
-                  Check again
+                  {t('payments.checkAgain')}
                 </TextureButton>
               )}
 
@@ -274,10 +283,10 @@ function PaymentSuccess() {
               <>
                 <CosmicButton as="button" onClick={() => navigate('/credits')} className="w-full" contentClassName="min-h-12">
                   <Coins className="w-4 h-4 mr-2" />
-                  Go to Credits
+                  {t('payments.goCredits')}
                 </CosmicButton>
                 <TextureButton variant="minimal" onClick={() => navigate('/dashboard')} className="w-full">
-                  Back to Dashboard
+                  {t('payments.backDashboard')}
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </TextureButton>
               </>
@@ -286,10 +295,10 @@ function PaymentSuccess() {
             {(state === 'failed' || state === 'expired') && (
               <>
                 <CosmicButton as="button" onClick={() => navigate('/credits')} className="w-full" contentClassName="min-h-12">
-                  Try Again
+                  {t('payments.tryAgain')}
                 </CosmicButton>
                 <TextureButton variant="minimal" onClick={() => navigate('/dashboard')} className="w-full">
-                  Back to Dashboard
+                  {t('payments.backDashboard')}
                 </TextureButton>
               </>
             )}
@@ -297,7 +306,7 @@ function PaymentSuccess() {
         </TextureCard>
 
         <p className="mt-6 text-center text-xs text-muted-foreground/60">
-          This page never credits your wallet directly. Credits are delivered only after server-side payment verification.
+          {t('payments.footerNote')}
         </p>
       </div>
     </div>

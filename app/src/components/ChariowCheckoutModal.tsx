@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2, Globe2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -14,20 +15,11 @@ import { CosmicButton } from '@/components/ui/cosmic-button';
 import { TextureButton } from '@/components/ui/texture-button';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api-client';
+import { formatCredits, formatCurrency } from '@/i18n/format';
+import { useLocalePreference } from '@/i18n/useLocalePreference';
 import { isValidPhoneNumber, parsePhoneNumberFromString } from 'libphonenumber-js/max';
 
-const COUNTRIES = [
-  { code: 'CM', label: 'Cameroon' },
-  { code: 'FR', label: 'France' },
-  { code: 'US', label: 'United States' },
-  { code: 'GB', label: 'United Kingdom' },
-  { code: 'DE', label: 'Germany' },
-  { code: 'CA', label: 'Canada' },
-  { code: 'BE', label: 'Belgium' },
-  { code: 'CH', label: 'Switzerland' },
-  { code: 'SN', label: 'Senegal' },
-  { code: 'CI', label: "Côte d'Ivoire" },
-] as const;
+const COUNTRY_CODES = ['CM', 'FR', 'US', 'GB', 'DE', 'CA', 'BE', 'CH', 'SN', 'CI'] as const;
 
 export interface ChariowPlan {
   id: string;
@@ -42,7 +34,16 @@ interface ChariowCheckoutModalProps {
   plan: ChariowPlan | null;
 }
 
+function translateApiError(message: string | undefined, t: (key: string) => string, fallback: string): string {
+  if (!message) return fallback;
+  const key = `errors.${message}`;
+  const translated = t(key);
+  return translated === key ? message : translated;
+}
+
 export function ChariowCheckoutModal({ isOpen, onClose, plan }: ChariowCheckoutModalProps) {
+  const { t } = useTranslation();
+  const { locale } = useLocalePreference();
   const { user } = useAuth();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -83,11 +84,11 @@ export function ChariowCheckoutModal({ isOpen, onClose, plan }: ChariowCheckoutM
 
   const handlePay = async () => {
     if (!firstName.trim() || !lastName.trim()) {
-      toast.error('Enter your first and last name.');
+      toast.error(t('payments.needNames'));
       return;
     }
     if (!isValidPhoneNumber(phone, countryCode as 'CM')) {
-      toast.error('Enter a valid phone number for the selected country.');
+      toast.error(t('payments.invalidPhone'));
       return;
     }
     setSubmitting(true);
@@ -106,10 +107,10 @@ export function ChariowCheckoutModal({ isOpen, onClose, plan }: ChariowCheckoutM
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(result.error || 'International checkout is unavailable.');
+        throw new Error(translateApiError(result.error, t, t('payments.chariowUnavailable')));
       }
       if (result.step === 'payment' && result.link) {
-        toast.success('Opening secure Chariow checkout...');
+        toast.success(t('payments.openingChariow'));
         window.open(String(result.link), '_blank', 'noopener,noreferrer');
         onClose();
         return;
@@ -119,9 +120,9 @@ export function ChariowCheckoutModal({ isOpen, onClose, plan }: ChariowCheckoutM
         onClose();
         return;
       }
-      throw new Error('Chariow returned an incomplete checkout.');
+      throw new Error(t('payments.chariowIncomplete'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'International checkout is unavailable.');
+      toast.error(error instanceof Error ? error.message : t('payments.chariowUnavailable'));
     } finally {
       setSubmitting(false);
     }
@@ -133,59 +134,62 @@ export function ChariowCheckoutModal({ isOpen, onClose, plan }: ChariowCheckoutM
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Globe2 className="size-5 text-primary" />
-            International payment
+            {t('payments.chariowTitle')}
           </DialogTitle>
           <DialogDescription>
-            {plan.name || 'Credit pack'} · {plan.credits.toLocaleString()} credits · ${plan.priceUsd.toLocaleString()} USD.
-            Card details are entered only on Chariow&apos;s secure page.
+            {t('payments.chariowDescription', {
+              name: plan.name || t('payments.creditPack'),
+              credits: formatCredits(plan.credits, locale),
+              price: formatCurrency(plan.priceUsd, 'USD', locale),
+            })}
           </DialogDescription>
         </DialogHeader>
 
         {loadingProfile ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Loading saved details…
+            <Loader2 className="size-4 animate-spin" /> {t('payments.loadingProfile')}
           </div>
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="chariow-first">First name</Label>
+                <Label htmlFor="chariow-first">{t('payments.firstName')}</Label>
                 <Input id="chariow-first" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="chariow-last">Last name</Label>
+                <Label htmlFor="chariow-last">{t('payments.lastName')}</Label>
                 <Input id="chariow-last" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="chariow-country">Country</Label>
+              <Label htmlFor="chariow-country">{t('payments.country')}</Label>
               <select
                 id="chariow-country"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value)}
               >
-                {COUNTRIES.map((country) => (
-                  <option key={country.code} value={country.code}>{country.label}</option>
+                {COUNTRY_CODES.map((code) => (
+                  <option key={code} value={code}>{t(`payments.countries.${code}`)}</option>
                 ))}
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="chariow-phone">Phone</Label>
+              <Label htmlFor="chariow-phone">{t('payments.phone')}</Label>
               <Input
                 id="chariow-phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="National or +E.164 number"
+                placeholder={t('payments.phonePlaceholder')}
                 autoComplete="tel"
               />
-              <p className="text-xs text-muted-foreground">Stored as E.164 for future checkouts. Never enter card numbers here.</p>
+              <p className="text-xs text-muted-foreground">{t('payments.phoneHint')}</p>
             </div>
             <div className="flex gap-2 pt-2">
-              <TextureButton variant="minimal" className="flex-1" onClick={onClose} disabled={submitting}>Cancel</TextureButton>
+              <TextureButton variant="minimal" className="flex-1" onClick={onClose} disabled={submitting}>{t('common.cancel')}</TextureButton>
               <CosmicButton as="button" className="flex-1" contentClassName="min-h-11" disabled={submitting} onClick={() => void handlePay()}>
                 {submitting && <Loader2 className="size-4 animate-spin" />}
-                Continue to Chariow
+                {t('payments.continueChariow')}
               </CosmicButton>
             </div>
           </div>

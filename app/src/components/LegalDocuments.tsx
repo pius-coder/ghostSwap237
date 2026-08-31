@@ -1,18 +1,29 @@
-export const TERMS_VERSION = '2026-08-31';
-export const PRIVACY_VERSION = '2026-08-31';
+import type { AppLocale } from '@/i18n/locale';
+import { LEGAL_DOCUMENTS, LEGAL_VERSION } from '@/i18n/legal/documents';
+import { getAppLocale } from '@/i18n';
 
-export function LegalDocuments() {
+export const TERMS_VERSION = LEGAL_VERSION;
+export const PRIVACY_VERSION = LEGAL_VERSION;
+
+export function LegalDocuments({ locale }: { locale?: AppLocale }) {
+  const active = locale ?? getAppLocale();
+  const terms = LEGAL_DOCUMENTS[active].terms;
+  const privacy = LEGAL_DOCUMENTS[active].privacy;
+
   return (
     <div className="space-y-6 text-sm leading-6 text-muted-foreground">
-      <section><h3 className="font-semibold text-foreground">Terms of use — version {TERMS_VERSION}</h3><p>Henshin is a creative real-time image transformation tool. You must use it lawfully, respect image rights, privacy, consent, intellectual property, platform rules and all rules applicable in your country.</p></section>
-      <section><h3 className="font-semibold text-foreground">Your responsibility</h3><p>You are solely responsible for the source images, prompts, generated output, broadcasts and accounts used with Henshin. Do not impersonate, deceive, harass, exploit, defame or create unlawful sexual, violent or discriminatory content. Do not use a person’s face or likeness without the permissions required by law.</p></section>
-      <section><h3 className="font-semibold text-foreground">AI limitations and disclaimer</h3><p>AI output may be inaccurate, offensive, unstable or unsuitable. Virtual-camera and third-party services may fail or become unavailable. To the fullest extent permitted by applicable law, Henshin is provided “as is” without a guarantee of uninterrupted operation or fitness for a particular purpose. Henshin does not endorse or assume responsibility for a user’s unlawful or unauthorised use. Nothing here excludes rights or liabilities that cannot legally be excluded.</p></section>
-      <section><h3 className="font-semibold text-foreground">Credits and payments</h3><p>Fast mode uses 2 credits per usable second. The standard PRO rate is 80 credits per usable second and is enforced by the server. Fapshi and Chariow are payment processors only. A Chariow purchase does not create or replace a Henshin PRO licence. Verified purchases are credited automatically; refunds, disputes or chargebacks may reverse corresponding credits.</p></section>
-      <section><h3 className="font-semibold text-foreground">Account and licence</h3><p>Keep your account secure. PRO access requires an active account-bound Henshin licence and sufficient credits. Licences may be revoked for fraud, abuse, chargeback, security risk or breach of these terms.</p></section>
-      <section><h3 className="font-semibold text-foreground">Privacy notice — version {PRIVACY_VERSION}</h3><p>We process account identifiers, email, wallet and transaction records, licence status, session duration and provider usage, device/app diagnostics, security logs, legal acceptance evidence and support communications. We use these data to authenticate users, deliver credits, operate Fast and PRO modes, prevent fraud, keep accounting and provide support.</p></section>
-      <section><h3 className="font-semibold text-foreground">Processors and transfers</h3><p>Depending on the feature, data may be processed by Supabase, fal.ai (Lucy PRO), Reactor, Fapshi, Chariow, hosting providers and configured notification providers. International processing may occur. Payment card or Mobile Money credentials are entered with the payment processor and should not be sent to Henshin support.</p></section>
-      <section><h3 className="font-semibold text-foreground">Retention and choices</h3><p>Financial, fraud-prevention, audit and acceptance evidence is retained as required for legal and accounting purposes. Operational records are retained only as needed for the service and security. You may request access, correction or deletion where applicable; some records must be retained. Contact support through the in-app support action or WhatsApp +237 620 124 019.</p></section>
-      <section><h3 className="font-semibold text-foreground">Important acknowledgement</h3><p>Checking the box confirms acceptance of the Terms and acknowledgement that you received this Privacy Notice. It is not consent to optional marketing or unrelated data use.</p></section>
+      {terms.sections.map((section) => (
+        <section key={section.id}>
+          <h3 className="font-semibold text-foreground">{section.title}</h3>
+          <p>{section.body}</p>
+        </section>
+      ))}
+      {privacy.sections.map((section) => (
+        <section key={section.id}>
+          <h3 className="font-semibold text-foreground">{section.title}</h3>
+          <p>{section.body}</p>
+        </section>
+      ))}
     </div>
   );
 }

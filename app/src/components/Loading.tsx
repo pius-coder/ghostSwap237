@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 interface LoadingProps {
   size?: 'sm' | 'md' | 'lg';
   fullScreen?: boolean;
@@ -30,5 +32,6 @@ export function Loading({ size = 'md', fullScreen = false, text }: LoadingProps)
 }
 
 export function PageLoading() {
-  return <Loading fullScreen text="Loading..." />;
+  const { t } = useTranslation();
+  return <Loading fullScreen text={t('common.loading')} />;
 }

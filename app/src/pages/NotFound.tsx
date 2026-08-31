@@ -1,10 +1,12 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { CosmicButton } from '@/components/ui/cosmic-button';
 import { TextureButton } from '@/components/ui/texture-button';
 import { TextureOverlay } from '@/components/ui/texture-overlay';
 import { Home, ArrowLeft } from 'lucide-react';
 
 function NotFound() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -16,14 +18,14 @@ function NotFound() {
         </h1>
         <div className="mx-auto mb-6 h-1 w-16 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" />
       </div>
-      <h2 className="text-2xl font-bold text-white mb-3">Page Not Found</h2>
+      <h2 className="text-2xl font-bold text-white mb-3">{t('notFound.title')}</h2>
       <p className="mb-8 max-w-md text-muted-foreground">
-        The page you're looking for doesn't exist or has been moved.
+        {t('notFound.body')}
       </p>
       <div className="flex flex-col sm:flex-row gap-3">
         <CosmicButton as="button" onClick={() => navigate('/dashboard')}>
           <Home className="size-4" />
-          Back to Dashboard
+          {t('notFound.home')}
         </CosmicButton>
         <TextureButton
           variant="secondary"
@@ -31,7 +33,7 @@ function NotFound() {
           onClick={() => window.history.back()}
         >
           <ArrowLeft className="size-4" />
-          Go Back
+          {t('notFound.goBack')}
         </TextureButton>
       </div>
     </div>

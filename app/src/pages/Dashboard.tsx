@@ -1,7 +1,8 @@
-﻿// Studio workspace — fxswap37 layout integrated into Henshin:
+// Studio workspace ? fxswap37 layout integrated into Henshin:
 // persona panel (left) + Stage with draggable camera PiP + SessionBar.
 // Engines: Reactor X2 (Fast) and fal.ai Lucy 2.5 (PRO).
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X2Provider } from '@reactor-models/x2';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
@@ -26,6 +27,8 @@ import { SessionHistoryDialog } from '@/components/studio/SessionHistoryDialog';
 import { ProAccessDialog } from '@/components/ProAccessDialog';
 import { useProAccess } from '@/hooks/useProAccess';
 import { TextureButton } from '@/components/ui/texture-button';
+import { formatDuration } from '@/i18n/format';
+import { useLocalePreference } from '@/i18n/useLocalePreference';
 
 const CREDITS_PER_SECOND = 2;
 const POLLING_INTERVAL_MS = 1000;
@@ -39,7 +42,7 @@ async function waitForGeneration(getGenerating: () => boolean, timeoutMs = 30_00
     if (getGenerating()) return;
     await new Promise((resolve) => window.setTimeout(resolve, 100));
   }
-  throw new Error('Reactor connected but did not begin generating before the timeout.');
+  throw new Error('REACTOR_TIMEOUT');
 }
 
 async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -128,6 +131,8 @@ function Workspace({
   proCreditsPerSecond: number | null;
   onLiveProviderChange: (next: LiveProvider) => void;
 }) {
+  const { t } = useTranslation();
+  const { locale } = useLocalePreference();
   const { user } = useAuth();
   const { credits, setCredits, setSessionStatus, refreshCredits, sessionHistory } = useApp();
   const session = useSessionCommands();
@@ -181,7 +186,7 @@ function Workspace({
     typeof window !== 'undefined' &&
     typeof (window as unknown as { require?: unknown }).require !== 'undefined';
 
-  // Virtual camera — Henshin's own service, fed by the VISIBLE output video.
+  // Virtual camera ? Henshin's own service, fed by the VISIBLE output video.
   const captureLive = session.kind === 'pro' ? session.status === 'ready' : session.metadata.generating;
   useVirtualCameraCapture(outputHostRef, captureLive, Boolean(isElectron), liveProvider);
 
@@ -192,7 +197,7 @@ function Workspace({
     }
   }, []);
 
-  // ── Billing (Supabase) ────────────────────────────────────────────────────
+  // -- Billing (Supabase) ----------------------------------------------------
   const pollSessionStatus = useCallback(async () => {
     const billingSessionId = billingSessionRef.current;
     if (!billingSessionId || !user?.id) return;
@@ -231,7 +236,7 @@ function Workspace({
           return;
         }
         await handleStop(false, reason);
-        toast.error(response.forceEnd ? 'Session ended because PRO access is inactive.' : 'Session ended because credits or the session limit were reached.');
+        toast.error(response.forceEnd ? t('studio.sessionEndedPro') : t('studio.sessionEndedCredits'));
       }
     } catch (error) {
       console.error('Poll error:', error);
@@ -239,7 +244,7 @@ function Workspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, setCredits]);
 
-  // ── Camera ────────────────────────────────────────────────────────────────
+  // -- Camera ----------------------------------------------------------------
   const activateCamera = async (deviceId: string) => {
     try {
       const constraints: MediaTrackConstraints = {
@@ -261,7 +266,7 @@ function Workspace({
       setCameraPickerOpen(false);
     } catch (error) {
       console.error('Webcam error:', error);
-      toast.error('Failed to access webcam. Please allow camera permissions.');
+      toast.error(t('studio.webcamFailed'));
     }
   };
 
@@ -278,19 +283,19 @@ function Workspace({
     setCameraLabel('');
   };
 
-  // ── Session controls ──────────────────────────────────────────────────────
+  // -- Session controls ------------------------------------------------------
   const handleStart = async () => {
     if (busyRef.current) return;
     if (!user?.id) {
-      toast.error('Please sign in before starting a session.');
+      toast.error(t('studio.signInBeforeSession'));
       return;
     }
     if (!sourceStream?.getVideoTracks().some((track) => track.readyState === 'live')) {
-      toast.error('Choose a camera first.');
+      toast.error(t('studio.chooseCameraFirst'));
       return;
     }
     if (!activePersona?.imageUrl) {
-      toast.error('Choose a persona first.');
+      toast.error(t('studio.choosePersonaFirst'));
       return;
     }
 
@@ -317,7 +322,7 @@ function Workspace({
       });
 
       if (!sessionResponse.allowed || !sessionResponse.sessionId) {
-        throw new Error(sessionResponse.error || 'Unable to start session.');
+        throw new Error(sessionResponse.error || t('studio.unableToStart'));
       }
       openedSessionId = sessionResponse.sessionId;
       billingSessionRef.current = openedSessionId;
@@ -369,7 +374,8 @@ function Workspace({
       billingSessionRef.current = null;
 
       const rawMessage = error instanceof Error ? error.message : String(error);
-      const message = liveProvider === 'fast' ? formatReactorFailure(rawMessage) || rawMessage : rawMessage;
+      const localizedRaw = rawMessage === 'REACTOR_TIMEOUT' ? t('studio.reactorTimeout') : rawMessage;
+      const message = liveProvider === 'fast' ? formatReactorFailure(localizedRaw) || localizedRaw : localizedRaw;
       setActionError(message);
       toast.error(message);
 
@@ -428,7 +434,7 @@ function Workspace({
 
     busyRef.current = false;
     setBusy(false);
-    if (showToast) toast.info('Session stopped');
+    if (showToast) toast.info(t('studio.sessionStopped'));
   }
 
   useEffect(() => {
@@ -437,7 +443,7 @@ function Workspace({
     }
   }, [session.status, setSessionStatus]);
 
-  // ── OBS preview window ────────────────────────────────────────────────────
+  // -- OBS preview window ----------------------------------------------------
   const closeObsPreviewWindow = useCallback((updateState = true) => {
     const previewWindow = obsWindowRef.current;
     if (previewWindow && !previewWindow.closed) previewWindow.close();
@@ -456,15 +462,15 @@ function Workspace({
     previewUrl.hash = '/preview';
     const win = window.open(previewUrl.toString(), PREVIEW_WINDOW_NAME, PREVIEW_WINDOW_FEATURES);
     if (!win) {
-      toast.error('Could not open the OBS preview window.');
+      toast.error(t('studio.obsPreviewFailed'));
       return;
     }
     obsWindowRef.current = win;
     win.focus();
     setIsObsMode(true);
-  }, [closeObsPreviewWindow]);
+  }, [closeObsPreviewWindow, t]);
 
-  // ── Cleanup ───────────────────────────────────────────────────────────────
+  // -- Cleanup ---------------------------------------------------------------
   useEffect(() => {
     return () => {
       if (user?.id) {
@@ -497,12 +503,12 @@ function Workspace({
   const selectedRate = liveProvider === 'fast' ? CREDITS_PER_SECOND : proCreditsPerSecond || sessionRate;
   const remainingSeconds = Math.max(0, Math.floor(credits / selectedRate));
   const remainingLabel = remainingSeconds > 0
-    ? `~${Math.floor(remainingSeconds / 60)}m ${remainingSeconds % 60}s left`
-    : 'No credits';
+    ? t('studio.remainingLeft', { duration: formatDuration(remainingSeconds, locale) })
+    : t('studio.noCredits');
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 gap-3">
-      {/* Left tab shell — Persona */}
+      {/* Left tab shell ? Persona */}
       <aside
         className={`h-full shrink-0 flex-col overflow-hidden transition-all duration-300 ${
           panelOpen ? 'flex w-full lg:w-[338px]' : 'hidden'
@@ -515,7 +521,7 @@ function Workspace({
               <TextureButton
                 variant="destructive"
                 size="icon"
-                aria-label="Dismiss"
+                aria-label={t('common.dismiss')}
                 className="float-right ml-2 !bg-transparent"
                 contentClassName="!size-5 !bg-transparent text-red-300 hover:text-white"
                 onClick={() => {
@@ -523,7 +529,7 @@ function Workspace({
                   setPublishError(null);
                 }}
               >
-                ✕
+                ?
               </TextureButton>
             </p>
           )}
@@ -537,7 +543,7 @@ function Workspace({
         </div>
       </aside>
 
-      {/* Right tab shell — Stage + SessionBar */}
+      {/* Right tab shell ? Stage + SessionBar */}
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
         <Stage
           generating={session.metadata.generating}

@@ -1,5 +1,6 @@
 // AddPersonaDialog — adapted from fxswap37 to the Henshin dark+blue tokens.
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { CosmicButton } from '@/components/ui/cosmic-button';
 import { MetalIconButton } from '@/components/ui/metal-button';
@@ -21,6 +22,7 @@ export function AddPersonaDialog({
   onClose: () => void;
   onSave: (name: string, file: File) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -91,15 +93,15 @@ export function AddPersonaDialog({
         <div className="flex items-start justify-between gap-3 px-5 py-4">
           <div>
             <h2 id="add-persona-title" className="text-base font-semibold text-foreground">
-              Add persona
+              {t('studio.addPersona')}
             </h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">Name, and a portrait.</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{t('studio.addPersonaSubtitle')}</p>
           </div>
           <MetalIconButton
             variant="ghost"
             strength={0.4}
             disableGlow
-            aria-label="Close"
+            aria-label={t('common.close')}
             disabled={busy}
             onClick={onClose}
           >
@@ -110,13 +112,13 @@ export function AddPersonaDialog({
         <div className="space-y-4 px-5 pb-5">
           <div className="space-y-1.5">
             <label htmlFor="persona-name" className="kpi-label">
-              Name
+              {t('studio.personaName')}
             </label>
             <input
               id="persona-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Studio look"
+              placeholder={t('studio.personaNamePlaceholder')}
               autoFocus
               maxLength={40}
               className="h-10 w-full rounded-lg border border-input bg-panel px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:border-ring/60"
@@ -124,7 +126,7 @@ export function AddPersonaDialog({
           </div>
 
           <div className="space-y-1.5">
-            <span className="kpi-label">Portrait</span>
+            <span className="kpi-label">{t('studio.portrait')}</span>
             {preview ? (
               <div className="relative overflow-hidden rounded-lg border border-border bg-panel">
                 <img src={preview} alt="" className="aspect-[4/5] max-h-56 w-full object-cover" />
@@ -132,7 +134,7 @@ export function AddPersonaDialog({
                   variant="destructive"
                   strength={0.35}
                   disableGlow
-                  aria-label="Remove image"
+                  aria-label={t('studio.removeImage')}
                   onClick={() => pickFile(undefined)}
                   metalFxClassName="absolute right-2 top-2"
                   className="text-white"
@@ -147,7 +149,7 @@ export function AddPersonaDialog({
                 className="w-full"
                 contentClassName="aspect-video"
               >
-                Choose an image…
+                {t('studio.chooseImage')}
               </TextureButton>
             )}
             <input
@@ -168,7 +170,7 @@ export function AddPersonaDialog({
             disabled={busy}
             onClick={onClose}
           >
-            Cancel
+            {t('common.cancel')}
           </TextureButton>
           <CosmicButton
             as="button"
@@ -177,7 +179,7 @@ export function AddPersonaDialog({
             className="min-h-9"
             contentClassName="min-h-8 px-4 py-1"
           >
-            {busy ? 'Saving…' : 'Save persona'}
+            {busy ? t('common.saving') : t('studio.savePersona')}
           </CosmicButton>
         </div>
       </TextureCard>

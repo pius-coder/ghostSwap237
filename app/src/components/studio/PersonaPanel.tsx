@@ -1,6 +1,7 @@
 // PersonaPanel — left column of the Studio (adapted from fxswap37).
 // A persona = portrait + prompt. Selecting one while live restarts the session.
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PanelLeftClose, Plus } from 'lucide-react';
 import { MetalIconButton } from '@/components/ui/metal-button';
 import { TextureCard } from '@/components/ui/texture-card';
@@ -35,6 +36,7 @@ export function PersonaPanel({
   onActivePersonaChange: (persona: Persona | null) => void;
   onCollapse: () => void;
 }) {
+  const { t } = useTranslation();
   const session = useSessionCommands();
   const statusRef = useRef(session.status);
 
@@ -177,9 +179,9 @@ export function PersonaPanel({
     <section className="flex flex-col">
       <header className="flex items-start justify-between gap-2 px-1 py-3">
         <div className="min-w-0">
-          <p className="kpi-label">Persona</p>
+          <p className="kpi-label">{t('studio.persona')}</p>
           <p className="mt-1 text-xs leading-snug text-muted-foreground">
-            Portrait applied to the live camera. Press Start when ready.
+            {t('studio.personaHint')}
           </p>
         </div>
         <div className="flex shrink-0 gap-1">
@@ -187,8 +189,8 @@ export function PersonaPanel({
             variant="ghost"
             strength={0.4}
             disableGlow
-            aria-label="Collapse persona panel"
-            title="Collapse persona panel"
+            aria-label={t('studio.collapsePanel')}
+            title={t('studio.collapsePanel')}
             onClick={onCollapse}
           >
             <PanelLeftClose className="size-4" />
@@ -197,8 +199,8 @@ export function PersonaPanel({
             variant="ghost"
             strength={0.48}
             disableGlow
-            aria-label="Add persona"
-            title="Add persona"
+            aria-label={t('studio.addPersona')}
+            title={t('studio.addPersona')}
             disabled={busy}
             onClick={() => setAdding(true)}
           >
@@ -221,7 +223,7 @@ export function PersonaPanel({
                 {activePersona.prompt || defaultPersonaPrompt()}
               </p>
               <label className="mt-2 inline-block cursor-pointer text-[11px] text-blue-400 underline-offset-2 hover:underline">
-                Replace portrait
+                {t('studio.replacePortrait')}
                 <input
                   ref={fileRef}
                   type="file"
@@ -243,12 +245,12 @@ export function PersonaPanel({
           </TextureCard>
         ) : (
           <p className="mb-4 text-xs text-muted-foreground">
-            Select a portrait below, then press Start.
+            {t('studio.selectPortrait')}
           </p>
         )}
 
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="kpi-label">Library</p>
+          <p className="kpi-label">{t('studio.library')}</p>
           <TextureButton
             variant="accent"
             size="sm"
@@ -257,7 +259,7 @@ export function PersonaPanel({
             contentClassName="gap-1.5 px-2.5 text-xs"
           >
             <Plus className="size-3.5" />
-            Add persona
+            {t('studio.addPersona')}
           </TextureButton>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -293,7 +295,7 @@ export function PersonaPanel({
                     className="absolute right-1.5 top-1.5"
                     contentClassName="min-h-6 px-2 text-[10px]"
                   >
-                    Delete
+                    {t('studio.delete')}
                   </TextureButton>
                 )}
               </div>
@@ -303,7 +305,7 @@ export function PersonaPanel({
 
         {!personas.length && !adding && (
           <p className="empty-panel mt-2 text-xs leading-snug text-muted-foreground">
-            No persona yet. Add a portrait to create your first persona.
+            {t('studio.noPersonaYet')}
           </p>
         )}
 
@@ -323,13 +325,13 @@ export function PersonaPanel({
         open={Boolean(pending)}
         title={
           pending?.kind === 'replace'
-            ? 'Replace this portrait?'
+            ? t('studio.replacePortraitTitle')
             : pending
-              ? `Switch to ${pending.persona.name}?`
-              : 'Switch persona?'
+              ? t('studio.switchToPersona', { name: pending.persona.name })
+              : t('studio.switchPersona')
         }
-        body="The current session will stop and restart with this portrait."
-        confirmLabel="Restart session"
+        body={t('studio.restartBody')}
+        confirmLabel={t('studio.restartSession')}
         busy={busy}
         onClose={() => {
           if (!busy) setPending(null);
