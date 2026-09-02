@@ -2,10 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
-import { CosmicButton } from '@/components/ui/cosmic-button';
-import { MetalIconButton } from '@/components/ui/metal-button';
-import { TextureCard } from '@/components/ui/texture-card';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton, AppSurface, IconButton } from '@/components/app';
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -83,7 +80,7 @@ export function AddPersonaDialog({
       role="presentation"
       onClick={busy ? undefined : onClose}
     >
-      <TextureCard
+      <AppSurface elevated
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-persona-title"
@@ -97,21 +94,18 @@ export function AddPersonaDialog({
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">{t('studio.addPersonaSubtitle')}</p>
           </div>
-          <MetalIconButton
-            variant="ghost"
-            strength={0.4}
-            disableGlow
-            aria-label={t('common.close')}
+          <IconButton
+            label={t('common.close')}
             disabled={busy}
             onClick={onClose}
           >
             <X className="size-4" />
-          </MetalIconButton>
+          </IconButton>
         </div>
 
         <div className="space-y-4 px-5 pb-5">
           <div className="space-y-1.5">
-            <label htmlFor="persona-name" className="kpi-label">
+            <label htmlFor="persona-name" className="text-xs font-medium text-muted-foreground">
               {t('studio.personaName')}
             </label>
             <input
@@ -126,31 +120,27 @@ export function AddPersonaDialog({
           </div>
 
           <div className="space-y-1.5">
-            <span className="kpi-label">{t('studio.portrait')}</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('studio.portrait')}</span>
             {preview ? (
               <div className="relative overflow-hidden rounded-lg border border-border bg-panel">
                 <img src={preview} alt="" className="aspect-[4/5] max-h-56 w-full object-cover" />
-                <MetalIconButton
-                  variant="destructive"
-                  strength={0.35}
-                  disableGlow
-                  aria-label={t('studio.removeImage')}
+                <IconButton
+                  variant="danger"
+                  label={t('studio.removeImage')}
                   onClick={() => pickFile(undefined)}
-                  metalFxClassName="absolute right-2 top-2"
-                  className="text-white"
+                  className="absolute right-2 top-2 text-white"
                 >
                   <X className="size-4" />
-                </MetalIconButton>
+                </IconButton>
               </div>
             ) : (
-              <TextureButton
+              <AppButton
                 variant="secondary"
                 onClick={() => fileRef.current?.click()}
                 className="w-full"
-                contentClassName="aspect-video"
               >
                 {t('studio.chooseImage')}
-              </TextureButton>
+              </AppButton>
             )}
             <input
               ref={fileRef}
@@ -165,24 +155,22 @@ export function AddPersonaDialog({
         </div>
 
         <div className="flex justify-end gap-2 px-5 pb-5">
-          <TextureButton
-            variant="minimal"
+          <AppButton
+            variant="ghost"
             disabled={busy}
             onClick={onClose}
           >
             {t('common.cancel')}
-          </TextureButton>
-          <CosmicButton
-            as="button"
+          </AppButton>
+          <AppButton
             disabled={!canSave}
             onClick={() => void save()}
             className="min-h-9"
-            contentClassName="min-h-8 px-4 py-1"
           >
             {busy ? t('common.saving') : t('studio.savePersona')}
-          </CosmicButton>
+          </AppButton>
         </div>
-      </TextureCard>
+      </AppSurface>
     </div>
   );
 }

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ShieldAlert, Download, Rocket } from 'lucide-react';
-import { CosmicButton } from '@/components/ui/cosmic-button';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton } from '@/components/app';
 import {
   Dialog,
   DialogContent,
@@ -41,50 +40,50 @@ export function UpdateModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[425px] bg-card border-border shadow-surface">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <div className="mx-auto w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center mb-4">
-            <Download className="w-6 h-6 text-blue-400" />
+          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-primary/10">
+            <Download className="size-6 text-primary" />
           </div>
-          <DialogTitle className="text-xl text-center text-foreground font-bold tracking-tight">{t('updates.available')}</DialogTitle>
-          <DialogDescription className="text-center text-muted-foreground pt-2">
+          <DialogTitle className="text-center text-lg font-semibold tracking-tight">
+            {t('updates.available')}
+          </DialogTitle>
+          <DialogDescription className="pt-2 text-center">
             {t('updates.readyBody')}
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="bg-panel border border-blue-500/20 rounded-lg p-4 my-2 flex items-start gap-3">
-          <ShieldAlert className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-          <div className="text-sm text-muted-foreground">
-            <p className="font-semibold text-foreground mb-1">{t('updates.defenderNote')}</p>
+
+        <div className="my-2 flex items-start gap-3 rounded-lg border border-white/[0.08] bg-surface-elevated p-4">
+          <ShieldAlert className="mt-0.5 size-5 shrink-0 text-primary" />
+          <div className="text-[13px] text-muted-foreground">
+            <p className="mb-1 font-semibold text-foreground">{t('updates.defenderNote')}</p>
             {t('updates.defenderBody')}
             <br />
-            <span className="font-medium text-blue-400">{t('updates.moreInfo')}</span> → <span className="font-medium text-blue-400">{t('updates.runAnyway')}</span>
+            <span className="font-medium text-primary">{t('updates.moreInfo')}</span>
+            {' → '}
+            <span className="font-medium text-primary">{t('updates.runAnyway')}</span>
           </div>
         </div>
 
-        <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-4 sm:justify-between w-full">
-          <TextureButton
-            variant="minimal"
-            onClick={() => setIsOpen(false)}
-            className="sm:w-1/2"
-          >
+        <DialogFooter className="mt-4 flex w-full flex-col gap-2 sm:flex-row sm:justify-between">
+          <AppButton variant="ghost" onClick={() => setIsOpen(false)} className="sm:w-1/2">
             {t('updates.later')}
-          </TextureButton>
-          <CosmicButton
-            as="button"
-            onClick={handleInstall} 
+          </AppButton>
+          <AppButton
+            onClick={() => void handleInstall()}
             disabled={isInstalling}
+            loading={isInstalling}
             className="sm:w-1/2"
           >
             {isInstalling ? (
               t('updates.launching')
             ) : (
               <>
-                <Rocket className="w-4 h-4 mr-2" />
+                <Rocket className="size-4" />
                 {t('updates.install')}
               </>
             )}
-          </CosmicButton>
+          </AppButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

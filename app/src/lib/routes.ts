@@ -7,6 +7,7 @@ export const ROUTES = {
   },
   PROTECTED: {
     DASHBOARD: '/dashboard',
+    HISTORY: '/history',
     WALLET: '/credits',
     SUBSCRIPTION: '/subscription',
     SETTINGS: '/settings',

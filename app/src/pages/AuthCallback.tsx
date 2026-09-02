@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle, Loader2, XCircle } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton, AppSurface, PublicScene } from '@/components/app';
 import { ROUTES } from '@/lib/routes';
 import { supabase } from '@/lib/supabase';
 
@@ -42,20 +42,20 @@ function AuthCallback() {
   }, [code, navigate, providerError, t]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-6">
-      <section className="w-full max-w-md rounded-2xl border border-blue-500/20 bg-panel p-8 text-center shadow-2xl">
-        {state === 'loading' && <Loader2 className="mx-auto size-12 animate-spin text-blue-400" />}
-        {state === 'success' && <CheckCircle className="mx-auto size-12 text-blue-400" />}
-        {state === 'error' && <XCircle className="mx-auto size-12 text-red-400" />}
-        <h1 className="mt-5 text-2xl font-semibold text-foreground">{t('auth.callbackTitle')}</h1>
-        <p className="mt-3 text-sm text-muted-foreground">{message}</p>
+    <PublicScene>
+      <AppSurface elevated className="w-full max-w-md p-8 text-center">
+        {state === 'loading' && <Loader2 className="mx-auto size-10 animate-spin text-foreground" />}
+        {state === 'success' && <CheckCircle className="mx-auto size-10 text-success" />}
+        {state === 'error' && <XCircle className="mx-auto size-10 text-destructive" />}
+        <h1 className="mt-5 text-xl font-semibold text-foreground">{t('auth.callbackTitle')}</h1>
+        <p className="mt-3 text-[13px] text-muted-foreground">{message}</p>
         {state === 'error' && (
-          <TextureButton className="mt-6 w-full" size="lg" onClick={() => navigate(ROUTES.PUBLIC.LOGIN)}>
+          <AppButton className="mt-6 w-full" onClick={() => navigate(ROUTES.PUBLIC.LOGIN)}>
             {t('auth.returnToSignIn')}
-          </TextureButton>
+          </AppButton>
         )}
-      </section>
-    </main>
+      </AppSurface>
+    </PublicScene>
   );
 }
 

@@ -1,30 +1,40 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Coins,
+  Headset,
+  Languages,
   LogOut,
   Menu,
   Minus,
+  PanelLeftClose,
+  PanelLeftOpen,
   Square,
+  Sun,
   X,
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { AnimatedNumber } from '@/components/ui/animated-number';
-import { MetalIconButton } from '@/components/ui/metal-button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { TextureButton } from '@/components/ui/texture-button';
-import { TextureOverlay } from '@/components/ui/texture-overlay';
+import { AppButton, IconButton } from '@/components/app';
 import { useAuth } from '@/context/AuthContext';
-import { useApp } from '@/context/AppContext';
-import { ADMIN_NAV, HENSHIN_NAV, getPageTitle, type NavItem } from '@/lib/nav';
+import {
+  ACCOUNT_NAV,
+  ADMIN_NAV,
+  WORKSPACE_NAV,
+  getPageTitle,
+  type NavLinkItem,
+} from '@/lib/nav';
 import { ROUTES } from '@/lib/routes';
 import { PricingDialogProvider } from '@/components/PricingDialog';
-import { usePricingDialog } from '@/hooks/usePricingDialog';
-import { formatCredits } from '@/i18n/format';
+import { ClientSidebar, ClientSidebarContent } from '@/components/ClientSidebar';
+import { ClientPlanMenu } from '@/components/ClientPlanMenu';
 import { useLocalePreference } from '@/i18n/useLocalePreference';
+import type { AppLocale } from '@/i18n/locale';
+import { cn } from '@/lib/utils';
+import { Avatar, AvatarFallback } from './ui/avatar';
 
-const SIDEBAR_COLLAPSED_WIDTH = 48;
+const SIDEBAR_STORAGE_KEY = 'henshin.sidebar.collapsed';
+const SIDEBAR_OPEN_PX = 216;
+const SIDEBAR_COLLAPSED_PX = 64;
 
 function getInitials(name?: string): string {
   if (!name) return 'U';
@@ -36,150 +46,20 @@ function getInitials(name?: string): string {
     .slice(0, 2);
 }
 
-/* Menu du tiroir mobile */
-function NavList({ onNavigate }: { onNavigate?: () => void }) {
-  const { user } = useAuth();
-  const { openPricing } = usePricingDialog();
-  const { t } = useTranslation();
-
-  const renderItem = (item: NavItem) => {
-    if (item.action === 'buy-credits') {
-      return (
-        <TextureButton
-          key={item.action}
-          variant="minimal"
-          size="sm"
-          onClick={() => {
-            onNavigate?.();
-            openPricing();
-          }}
-          className="w-full"
-          contentClassName="justify-start"
-        >
-          <item.icon className="h-[18px] w-[18px] shrink-0" />
-          <span>{t(item.labelKey)}</span>
-        </TextureButton>
-      );
-    }
-
-    return (
-      <NavLink key={item.path} to={item.path} onClick={onNavigate} className="nav-item w-full">
-        <item.icon className="h-[18px] w-[18px] shrink-0" />
-        <span>{t(item.labelKey)}</span>
-      </NavLink>
-    );
-  };
-
-  return (
-    <nav className="mobile-nav space-y-0.5" aria-label="Henshin">
-      {HENSHIN_NAV.map(renderItem)}
-      {user?.isAdmin &&
-        ADMIN_NAV.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            onClick={onNavigate}
-            className="nav-item mt-3 w-full"
-          >
-            <item.icon className="h-[18px] w-[18px] shrink-0" />
-            <span className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="flex-1">{t(item.labelKey)}</span>
-              <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">
-                {t('common.adminBadge')}
-              </span>
-            </span>
-          </NavLink>
-        ))}
-    </nav>
-  );
+function readCollapsedPreference(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
-function SidebarBody() {
-  const { user, logout } = useAuth();
-  const { openPricing } = usePricingDialog();
-  const navigate = useNavigate();
-  const { t } = useTranslation();
-
-  const handleLogout = () => {
-    logout();
-    navigate(ROUTES.PUBLIC.LOGIN);
-  };
-
-  const renderItem = (item: NavItem) => {
-    const content = (
-      <>
-        <span className="side-icon-slot">
-          <item.icon className="side-icon" strokeWidth={1.5} />
-        </span>
-        <span className="side-tooltip" aria-hidden="true">{t(item.labelKey)}</span>
-      </>
-    );
-
-    if (item.action === 'buy-credits') {
-      return (
-        <TextureButton
-          key={item.action}
-          variant="icon"
-          size="icon"
-          onClick={openPricing}
-          aria-label={t(item.labelKey)}
-          className="side-item !bg-transparent !p-0"
-          contentClassName="!size-8 !min-h-8"
-        >
-          {content}
-        </TextureButton>
-      );
-    }
-
-    return (
-      <NavLink key={item.path} to={item.path} aria-label={t(item.labelKey)} className="side-item">
-        {content}
-      </NavLink>
-    );
-  };
-
-  return (
-    <div className="flex h-full w-full flex-col px-1 py-1.5">
-      <nav className="flex flex-col gap-0.5" aria-label="Henshin">
-        {HENSHIN_NAV.map(renderItem)}
-      </nav>
-
-      {user?.isAdmin && (
-        <nav className="mt-3 flex flex-col gap-0.5" aria-label="Admin">
-          {ADMIN_NAV.map(renderItem)}
-        </nav>
-      )}
-
-      <div className="mt-auto flex flex-col gap-0.5">
-        {/* Bloc utilisateur */}
-        <div className="side-item side-user-row cursor-default">
-          <span className="side-icon-slot">
-            <Avatar className="h-8 w-8 shrink-0 ring-2 ring-border">
-              <AvatarFallback className="bg-blue-500/15 text-[10px] font-semibold text-blue-400">
-                {getInitials(user?.name)}
-              </AvatarFallback>
-            </Avatar>
-          </span>
-          <span className="side-tooltip" aria-hidden="true">{user?.name || t('common.user')}</span>
-        </div>
-
-        {/* Déconnexion */}
-        <TextureButton
-          variant="icon"
-          size="icon"
-          onClick={handleLogout}
-          aria-label={t('common.signOut')}
-          className="side-item !bg-transparent !p-0"
-          contentClassName="!size-8 !min-h-8"
-        >
-          <span className="side-icon-slot">
-            <LogOut className="side-icon" strokeWidth={1.5} />
-          </span>
-          <span className="side-tooltip" aria-hidden="true">{t('common.signOut')}</span>
-        </TextureButton>
-      </div>
-    </div>
-  );
+function writeCollapsedPreference(collapsed: boolean) {
+  try {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
 }
 
 type ElectronBridge = {
@@ -195,194 +75,359 @@ function getElectronIpc() {
   }
 }
 
-function LayoutShell() {
+function NavGroup({
+  label,
+  items,
+  collapsed,
+  onNavigate,
+}: {
+  label: string;
+  items: NavLinkItem[];
+  collapsed: boolean;
+  onNavigate?: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-1">
+      {!collapsed ? (
+        <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+      ) : null}
+      <nav className="flex flex-col gap-0.5" aria-label={label}>
+        {items.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            onClick={onNavigate}
+            title={collapsed ? t(item.labelKey) : undefined}
+            className={({ isActive }) =>
+              cn(
+                'nav-item',
+                collapsed && 'justify-center px-2',
+                isActive && 'aria-[current=page]:bg-primary/10',
+              )
+            }
+          >
+            <item.icon className="size-[18px] shrink-0" strokeWidth={1.5} />
+            {!collapsed ? <span className="truncate">{t(item.labelKey)}</span> : null}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+function SidebarBody({
+  collapsed,
+  onToggle,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  onNavigate?: () => void;
+}) {
   const { user, logout } = useAuth();
-  const { credits, sessionStatus } = useApp();
-  const location = useLocation();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { locale } = useLocalePreference();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [isElectron] = useState(() => getElectronIpc() !== null);
-  const pageTitle = getPageTitle(location.pathname, t);
-  const isStudio =
-    location.pathname === '/' || location.pathname === ROUTES.PROTECTED.DASHBOARD;
-
-  const handleWindowControl = (action: 'minimize' | 'maximize' | 'close') => {
-    getElectronIpc()?.send(`window-${action}`);
-  };
+  const { locale, setLocale } = useLocalePreference();
 
   const handleLogout = () => {
     logout();
     navigate(ROUTES.PUBLIC.LOGIN);
   };
 
-  const live = sessionStatus === 'LIVE';
+  const cycleLocale = () => {
+    const next: AppLocale = locale === 'fr' ? 'en' : 'fr';
+    void setLocale(next, { persistServer: true });
+  };
 
   return (
-    <div className="fixed inset-0 isolate flex flex-col overflow-hidden bg-background">
-      <TextureOverlay texture="paperGrain" opacity={0.16} className="z-0 mix-blend-soft-light" />
-      {/* Header — 48px, draggable pour la fenêtre frameless */}
-      <header className="app-region-drag relative z-50 flex h-12 shrink-0 items-center justify-between pl-2 pr-0">
-        <div className="flex min-w-0 items-center gap-3">
-          {/* Hamburger mobile */}
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild>
-              <TextureButton
-                variant="icon"
-                size="icon"
-                aria-label={t('common.menu')}
-                className="app-region-no-drag md:hidden"
-              >
-                <Menu className="size-4" strokeWidth={1.5} />
-              </TextureButton>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[250px] bg-sidebar p-4">
-              <div className="mb-4 flex items-center gap-2.5">
-                <div className="h-8 w-8 overflow-hidden rounded-lg ring-1 ring-blue-500/30">
-                  <img src="./logo.png" alt="Logo" className="h-full w-full object-cover" />
-                </div>
-                <span className="text-sm font-bold tracking-tight text-foreground">
-                  Henshin 変身
-                </span>
-              </div>
-              <NavList onNavigate={() => setMobileOpen(false)} />
-            </SheetContent>
-          </Sheet>
+    <div className="flex h-full flex-col gap-4 px-2 py-3">
+      <NavGroup
+        label={t('nav.groupWorkspace')}
+        items={WORKSPACE_NAV}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      />
+      <NavGroup
+        label={t('nav.groupAccount')}
+        items={ACCOUNT_NAV}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      />
+      {user?.isAdmin ? (
+        <NavGroup
+          label={t('nav.groupAdmin')}
+          items={ADMIN_NAV}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+        />
+      ) : null}
 
-          {/* Logo compact centré sur le rail 48px (desktop) */}
-          <NavLink
-            to={ROUTES.PROTECTED.DASHBOARD}
-            title="Henshin 変身"
-            aria-label="Henshin"
-            className="app-region-no-drag hidden size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-blue-500/30 md:flex"
-          >
-            <img src="./logo.png" alt="" className="h-full w-full object-cover" />
-          </NavLink>
+      <div className="mt-auto flex flex-col gap-1 border-t border-white/[0.08] pt-3">
+        <AppButton
+          variant="ghost"
+          size={collapsed ? 'icon' : 'sm'}
+          onClick={cycleLocale}
+          aria-label={t('shell.language')}
+          className={cn('w-full', !collapsed && 'justify-start')}
+        >
+          <span className="text-xs font-semibold uppercase">{locale}</span>
+          {!collapsed ? <span>{t('shell.language')}</span> : null}
+        </AppButton>
 
-          <p className="truncate text-[15px] font-medium text-foreground">{pageTitle}</p>
+        <div
+          className={cn(
+            'flex items-center gap-2 rounded-lg px-2 py-1.5',
+            collapsed && 'justify-center',
+          )}
+        >
+          <Avatar className="size-8 shrink-0">
+            <AvatarFallback className="bg-accent text-[11px] font-semibold text-foreground">
+              {getInitials(user?.name)}
+            </AvatarFallback>
+          </Avatar>
+          {!collapsed ? (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium text-foreground">
+                {user?.name || t('common.user')}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+            </div>
+          ) : null}
         </div>
 
-        <div className="app-region-no-drag flex shrink-0 items-center gap-2">
-          {/* Statut de session */}
-          <div
-            className="hidden items-center gap-2 px-2 py-1.5 sm:flex"
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                live ? 'animate-pulse bg-red-500' : 'bg-muted-foreground/60'
-              }`}
-            />
-            <span
-              className={`text-[10px] font-bold uppercase tracking-wider ${
-                live ? 'text-red-400' : 'text-muted-foreground'
-              }`}
+        <AppButton
+          variant="ghost"
+          size={collapsed ? 'icon' : 'sm'}
+          onClick={handleLogout}
+          aria-label={t('common.signOut')}
+          className={cn('w-full', !collapsed && 'justify-start')}
+        >
+          <LogOut className="size-4" />
+          {!collapsed ? <span>{t('common.signOut')}</span> : null}
+        </AppButton>
+
+        <AppButton
+          variant="ghost"
+          size={collapsed ? 'icon' : 'sm'}
+          onClick={onToggle}
+          aria-label={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
+          className={cn('w-full', !collapsed && 'justify-start')}
+        >
+          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+          {!collapsed ? <span>{t('shell.collapseSidebar')}</span> : null}
+        </AppButton>
+      </div>
+    </div>
+  );
+}
+
+function LayoutShell() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { locale, setLocale } = useLocalePreference();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isElectron] = useState(() => getElectronIpc() !== null);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    if (window.innerWidth < 1024) return true;
+    return readCollapsedPreference();
+  });
+  const [isCompact, setIsCompact] = useState(
+    () => (typeof window !== 'undefined' ? window.innerWidth < 1024 : false),
+  );
+
+  const isClientWorkspace = [
+    '/',
+    ROUTES.PROTECTED.DASHBOARD,
+    ROUTES.PROTECTED.HISTORY,
+    ROUTES.PROTECTED.WALLET,
+    ROUTES.PROTECTED.SETTINGS,
+  ].includes(location.pathname);
+  const pageTitle = isClientWorkspace ? 'Henshin Studio' : getPageTitle(location.pathname, t);
+
+  useEffect(() => {
+    const onResize = () => {
+      const compact = window.innerWidth < 1024;
+      setIsCompact(compact);
+      if (compact) setCollapsed(true);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    const next = !collapsed;
+    setCollapsed(next);
+    if (!isCompact) writeCollapsedPreference(next);
+  }, [collapsed, isCompact]);
+
+  const handleWindowControl = (action: 'minimize' | 'maximize' | 'close') => {
+    getElectronIpc()?.send(`window-${action}`);
+  };
+
+  const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_PX : SIDEBAR_OPEN_PX;
+
+  return (
+    <div className="app-atmosphere fixed inset-0 isolate flex flex-col overflow-hidden bg-background">
+      <header
+        className={cn(
+          'app-region-drag relative z-50 flex shrink-0 items-center justify-between pr-0',
+          isClientWorkspace
+            ? 'h-[52px] bg-white py-2 pl-2 text-[#242322] backdrop-blur-[10px]'
+            : 'border-b border-white/[0.08] bg-[rgba(5,6,18,0.78)] pl-3 backdrop-blur-xl',
+        )}
+      >
+        <div className={cn('flex min-w-0 items-center gap-3', isClientWorkspace && 'flex-1')}>
+          <div className={cn('flex min-w-0 items-center gap-2', isClientWorkspace && 'px-0')}>
+          {isCompact ? (
+            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+              <SheetTrigger asChild>
+                <IconButton
+                  label={t('shell.openNavigation')}
+                  className={cn('app-region-no-drag', isClientWorkspace && 'text-[#242322] hover:bg-black/[0.06]')}
+                >
+                  <Menu />
+                </IconButton>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[280px] border-white/[0.08] bg-background p-0">
+                <div className="flex items-center px-4 py-3">
+                  <span className={cn('text-sm font-semibold', isClientWorkspace ? 'text-[#242322]' : 'text-foreground')}>
+                    {isClientWorkspace ? 'Henshin Studio' : t('common.appName')}
+                  </span>
+                </div>
+                {isClientWorkspace ? (
+                  <ClientSidebarContent mobile onNavigate={() => setMobileOpen(false)} />
+                ) : (
+                  <SidebarBody
+                    collapsed={false}
+                    onToggle={() => setMobileOpen(false)}
+                    onNavigate={() => setMobileOpen(false)}
+                  />
+                )}
+              </SheetContent>
+            </Sheet>
+          ) : null}
+
+          {!isClientWorkspace ? (
+            <NavLink
+              to={ROUTES.PROTECTED.DASHBOARD}
+              aria-label={t('common.appName')}
+              className="app-region-no-drag hidden size-8 shrink-0 overflow-hidden rounded-lg lg:flex"
             >
-              {live ? t('common.live') : t('common.idle')}
-            </span>
+              <img src="./logo.png" alt="" className="h-full w-full object-cover" />
+            </NavLink>
+          ) : null}
+
+          <p
+            className={cn(
+              'truncate font-semibold',
+              isClientWorkspace
+                ? 'text-[24px] font-semibold leading-8 tracking-[-0.45px] text-[#5f6065]'
+                : 'text-[15px] text-foreground',
+            )}
+          >
+            {pageTitle}
+          </p>
+          {isClientWorkspace ? <span className="text-[18px] font-medium tracking-normal text-[#77787d]">変身</span> : null}
           </div>
+        </div>
 
-          {/* Crédits */}
-          <NavLink
-            to={ROUTES.PROTECTED.WALLET}
-            title={t('common.credits')}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:text-blue-300"
-          >
-            <Coins className="h-3.5 w-3.5 text-blue-400" />
-            <span className="text-sm font-bold tabular-nums text-foreground">
-              <AnimatedNumber value={Math.round(credits)} format={(n) => formatCredits(n, locale)} />
-            </span>
-          </NavLink>
-
-          {/* Compte */}
-          <div className="group relative">
-            <MetalIconButton
-              className="size-7"
-              disableGlow
-              strength={0.45}
-              aria-label={t('common.accountMenu')}
-            >
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className="bg-accent text-[11px] font-semibold text-foreground">
-                  {getInitials(user?.name)}
-                </AvatarFallback>
-              </Avatar>
-            </MetalIconButton>
-            <div className="invisible absolute right-0 top-full z-50 mt-2 w-56 rounded-xl bg-popover py-1.5 opacity-0 shadow-surface transition-all duration-200 group-hover:visible group-hover:opacity-100">
-              <div className="px-4 py-3">
-                <p className="truncate text-sm font-semibold text-foreground">
-                  {user?.name || t('common.user')}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{user?.email || ''}</p>
-              </div>
-              <TextureButton
-                variant="minimal"
-                size="sm"
-                onClick={handleLogout}
-                className="mx-1 w-[calc(100%-0.5rem)]"
-                contentClassName="justify-start"
+        <div className="app-region-no-drag flex shrink-0 items-center gap-2 pr-3">
+          {isClientWorkspace ? (
+            <>
+              <button
+                type="button"
+                className="client-topbar-icon-control"
+                aria-label="Thème"
               >
-                <LogOut className="h-4 w-4" />
-                {t('common.signOut')}
-              </TextureButton>
-            </div>
-          </div>
+                <Sun className="size-[18px]" strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                className="client-topbar-icon-control"
+                onClick={() => void setLocale(locale === 'fr' ? 'en' : 'fr', { persistServer: true })}
+                aria-label={t('shell.language')}
+              >
+                <Languages className="size-4" strokeWidth={1.8} />
+              </button>
+              <button
+                type="button"
+                className="client-topbar-icon-control"
+                aria-label="Discord"
+              >
+                <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+                  <path fill="currentColor" d="M19.303 5.337A15.8 15.8 0 0 0 14.963 4c-.191.329-.403.775-.552 1.125a16.7 16.7 0 0 0-4.808 0A12 12 0 0 0 9.051 4a15.7 15.7 0 0 0-4.342 1.337C1.961 9.391 1.218 13.35 1.589 17.255a17.5 17.5 0 0 0 5.318 2.664c.425-.573.807-1.189 1.136-1.836a10.3 10.3 0 0 1-1.794-.86l.435-.34c3.46 1.581 7.207 1.581 10.624 0l.435.34c-.573.34-1.167.626-1.793.86.329.647.711 1.263 1.135 1.836a17.5 17.5 0 0 0 5.318-2.664c.457-4.521-.723-8.448-3.1-11.918M8.52 14.846c-1.04 0-1.889-.945-1.889-2.101 0-1.157.828-2.102 1.889-2.102 1.051 0 1.91.945 1.889 2.102 0 1.156-.838 2.101-1.889 2.101m6.974 0c-1.04 0-1.89-.945-1.89-2.101 0-1.157.829-2.102 1.89-2.102 1.05 0 1.91.945 1.889 2.102 0 1.156-.828 2.101-1.889 2.101" />
+                </svg>
+              </button>
+              <a
+                className="client-topbar-icon-control"
+                href="https://wa.me/237620124019"
+                target="_blank"
+                rel="noreferrer"
+                aria-label={t('studio.contactWhatsApp')}
+              >
+                <Headset className="size-4" strokeWidth={1.8} />
+              </a>
+              <ClientPlanMenu />
+            </>
+          ) : null}
 
-          {/* Contrôles fenêtre (Electron) */}
-          {isElectron && (
-            <div className="flex items-center self-stretch">
-              <TextureButton
-                variant="icon"
-                size="icon"
-                title={t('common.minimize')}
-                aria-label={t('common.minimize')}
+          {isElectron ? (
+            <div className="ml-1 flex items-center self-stretch">
+              <IconButton
+                label={t('common.minimize')}
+                variant="ghost"
+                className={cn('rounded-none', isClientWorkspace && 'text-[#242322] hover:bg-black/[0.06]')}
                 onClick={() => handleWindowControl('minimize')}
-                className="rounded-none !bg-transparent"
-                contentClassName="rounded-none !bg-transparent"
               >
-                <Minus className="h-4 w-4" />
-              </TextureButton>
-              <TextureButton
-                variant="icon"
-                size="icon"
-                title={t('common.maximize')}
-                aria-label={t('common.maximize')}
+                <Minus />
+              </IconButton>
+              <IconButton
+                label={t('common.maximize')}
+                variant="ghost"
+                className={cn('rounded-none', isClientWorkspace && 'text-[#242322] hover:bg-black/[0.06]')}
                 onClick={() => handleWindowControl('maximize')}
-                className="rounded-none !bg-transparent"
-                contentClassName="rounded-none !bg-transparent"
               >
-                <Square className="h-4 w-4" />
-              </TextureButton>
-              <TextureButton
-                variant="destructive"
-                size="icon"
-                title={t('common.close')}
-                aria-label={t('common.close')}
+                <Square />
+              </IconButton>
+              <IconButton
+                label={t('common.close')}
+                variant="ghost"
+                className={cn(
+                  'rounded-none hover:bg-destructive hover:text-destructive-foreground',
+                  isClientWorkspace && 'text-[#242322]',
+                )}
                 onClick={() => handleWindowControl('close')}
-                className="rounded-none !bg-transparent"
-                contentClassName="rounded-none !bg-transparent text-muted-foreground hover:!bg-red-500 hover:text-white"
               >
-                <X className="h-4 w-4" />
-              </TextureButton>
+                <X />
+              </IconButton>
             </div>
-          )}
+          ) : null}
         </div>
       </header>
 
-      {/* Corps : rail fixe + surface de contenu scrollable */}
-      <div className="relative z-10 grid min-h-0 flex-1 gap-2 p-2 md:grid-cols-[48px_minmax(0,1fr)]">
-        <aside
-          className="sidebar-shell relative hidden h-full flex-col md:flex"
-          style={{ width: SIDEBAR_COLLAPSED_WIDTH, overflow: 'visible' }}
-        >
-          <SidebarBody />
-        </aside>
-
-        <section className="min-h-0 flex-1 overflow-hidden">
-          <div className="custom-scrollbar h-full overflow-auto">
-            <div
-              className={`flex h-full min-h-0 flex-col ${isStudio ? '' : 'p-3 lg:p-4'}`}
+      <div className="relative z-10 flex min-h-0 flex-1">
+        {!isCompact ? (
+          isClientWorkspace ? (
+            <ClientSidebar collapsed={collapsed} onToggle={toggleCollapsed} />
+          ) : (
+            <aside
+              className="hidden h-full shrink-0 border-r border-white/[0.08] bg-[rgba(8,8,18,0.82)] backdrop-blur-xl lg:flex"
+              style={{ width: sidebarWidth }}
+              data-collapsed={collapsed ? 'true' : 'false'}
             >
+              <SidebarBody collapsed={collapsed} onToggle={toggleCollapsed} />
+            </aside>
+          )
+        ) : null}
+
+        <section className={cn('min-h-0 min-w-0 flex-1 overflow-hidden', isClientWorkspace ? 'client-main-frame' : 'bg-black/10')}>
+          <div className={cn('custom-scrollbar h-full overflow-auto', isClientWorkspace && 'client-main-shell')}>
+            <div className={cn('flex h-full min-h-0 flex-col', isClientWorkspace ? '' : 'p-4 lg:p-5')}>
               <Outlet />
             </div>
           </div>

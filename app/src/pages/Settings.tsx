@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Download, Loader2, RefreshCw, Rocket } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { CosmicButton } from '@/components/ui/cosmic-button';
-import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
-import { TextureButton } from '@/components/ui/texture-button';
-import { TextureCard } from '@/components/ui/texture-card';
-import { Label } from '@/components/ui/label';
+import {
+  AppButton,
+  AppSurface,
+  InlineAlert,
+  SectionHeader,
+  StatusBadge,
+  AppDialog,
+  AppDialogContent,
+  AppDialogHeader,
+  AppDialogTitle,
+} from '@/components/app';
 import { useAuth } from '@/context/AuthContext';
 import { CURRENT_VERSION } from '@/lib/app-version';
 import {
@@ -22,6 +25,9 @@ import {
 import { formatDateTime } from '@/i18n/format';
 import { useLocalePreference } from '@/i18n/useLocalePreference';
 import type { AppLocale } from '@/i18n/locale';
+import { LEGAL_VERSION } from '@/i18n/legal/documents';
+import { LegalDocuments } from '@/components/LegalDocuments';
+import { useProAccess } from '@/hooks/useProAccess';
 import { toast } from 'sonner';
 
 const INITIAL_UPDATE_STATE: DesktopUpdateState = {
@@ -57,33 +63,31 @@ function getUpdateButtonLabel(status: DesktopUpdateStatus, t: (key: string) => s
   }
 }
 
-function Settings() {
+function Settings({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation();
   const { locale, setLocale } = useLocalePreference();
   const { user, logout } = useAuth();
-  const [name, setName] = useState(user?.name || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [isSaving, setIsSaving] = useState(false);
+  const { access: proAccess } = useProAccess(user?.id);
   const [localeBusy, setLocaleBusy] = useState(false);
+  const [legalDoc, setLegalDoc] = useState<'terms' | 'privacy' | null>(null);
   const [updateState, setUpdateState] = useState<DesktopUpdateState>({
     ...INITIAL_UPDATE_STATE,
     message: t('settings.checkingAvailability'),
   });
   const previousUpdateStatusRef = useRef<DesktopUpdateStatus | null>(null);
+  const isElectron =
+    typeof window !== 'undefined' &&
+    typeof (window as unknown as { require?: unknown }).require !== 'undefined';
 
   useEffect(() => {
     let isMounted = true;
 
     void getDesktopUpdateState().then((state) => {
-      if (isMounted) {
-        setUpdateState(state);
-      }
+      if (isMounted) setUpdateState(state);
     });
 
     const unsubscribe = subscribeToDesktopUpdateState((state) => {
-      if (isMounted) {
-        setUpdateState(state);
-      }
+      if (isMounted) setUpdateState(state);
     });
 
     return () => {
@@ -94,10 +98,7 @@ function Settings() {
 
   useEffect(() => {
     const previousStatus = previousUpdateStatusRef.current;
-
-    if (previousStatus === updateState.status) {
-      return;
-    }
+    if (previousStatus === updateState.status) return;
 
     if (previousStatus === 'checking' && updateState.status === 'up-to-date') {
       toast.success(updateState.message);
@@ -125,20 +126,12 @@ function Settings() {
     }
   };
 
-  const handleSaveProfile = async () => {
-    setIsSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    toast.success(t('settings.profileSaved'));
-    setIsSaving(false);
-  };
-
   const handleCheckForUpdates = async () => {
     try {
       if (updateState.status === 'downloaded') {
         await installDesktopUpdate();
         return;
       }
-
       await checkForDesktopUpdates();
     } catch (error) {
       const message = error instanceof Error ? error.message : t('settings.updateFailed');
@@ -161,226 +154,230 @@ function Settings() {
     .trim();
 
   return (
-    <div className="max-w-3xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">{t('settings.title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('settings.subtitle')}</p>
-      </div>
+    <div className="mx-auto w-full max-w-5xl space-y-5">
+      {!embedded ? (
+        <SectionHeader title={t('settings.title')} description={t('settings.subtitle')} />
+      ) : null}
 
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-white tracking-tight">{t('locale.sectionTitle')}</CardTitle>
-            <CardDescription className="text-xs">{t('locale.sectionDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="flex flex-wrap gap-3">
-              <TextureButton
-                variant={locale === 'fr' ? 'accent' : 'secondary'}
-                disabled={localeBusy}
-                onClick={() => void handleLocaleChange('fr')}
-              >
-                {t('locale.french')}
-              </TextureButton>
-              <TextureButton
-                variant={locale === 'en' ? 'accent' : 'secondary'}
-                disabled={localeBusy}
-                onClick={() => void handleLocaleChange('en')}
-              >
-                {t('locale.english')}
-              </TextureButton>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <AppSurface elevated>
+        <SectionHeader title={t('settings.general')} description={t('settings.generalDescription')} />
+        <dl className="grid gap-3 text-[13px] sm:grid-cols-2">
+          <div>
+            <dt className="text-muted-foreground">{t('settings.appVersion')}</dt>
+            <dd className="font-medium text-foreground">{CURRENT_VERSION}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">{t('settings.environment')}</dt>
+            <dd className="font-medium text-foreground">
+              {isElectron ? t('settings.environmentDesktop') : t('settings.environmentWeb')}
+            </dd>
+          </div>
+        </dl>
+      </AppSurface>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-white tracking-tight">{t('settings.updates')}</CardTitle>
-            <CardDescription className="text-xs">{t('settings.updatesDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6 space-y-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  {updateState.status === 'downloaded' ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  ) : updateState.status === 'installing' ? (
-                    <Rocket className="w-4 h-4 text-blue-400" />
-                  ) : (
-                    <RefreshCw className={`w-4 h-4 ${isUpdaterBusy ? 'text-blue-400 animate-spin' : 'text-muted-foreground'}`} />
-                  )}
-                  <p className="text-sm font-medium text-white">{t('settings.updateStatus')}</p>
-                </div>
-                <p className="text-sm text-foreground/90">{updateState.message}</p>
-                <p className="text-xs text-muted-foreground">{t('settings.lastChecked', { when: checkedAtLabel })}</p>
-              </div>
-              <TextureButton
-                variant="accent"
-                onClick={handleCheckForUpdates}
-                disabled={!updateState.isElectron || isUpdaterBusy}
-                className="sm:min-w-[190px]"
-              >
-                {isUpdaterBusy ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : updateState.status === 'downloaded' ? (
-                  <Rocket className="w-4 h-4 mr-2" />
+      <AppSurface elevated>
+        <SectionHeader title={t('settings.language')} description={t('settings.languageDescription')} />
+        <div className="flex flex-wrap gap-2">
+          <AppButton
+            variant={locale === 'fr' ? 'primary' : 'secondary'}
+            disabled={localeBusy}
+            onClick={() => void handleLocaleChange('fr')}
+          >
+            {t('locale.french')}
+          </AppButton>
+          <AppButton
+            variant={locale === 'en' ? 'primary' : 'secondary'}
+            disabled={localeBusy}
+            onClick={() => void handleLocaleChange('en')}
+          >
+            {t('locale.english')}
+          </AppButton>
+        </div>
+      </AppSurface>
+
+      <AppSurface elevated>
+        <SectionHeader
+          title={t('settings.virtualCamera')}
+          description={t('settings.virtualCameraDescription')}
+        />
+        <div className="space-y-3 text-[13px]">
+          <InlineAlert tone="info">{t('settings.virtualCameraWindowsRequired')}</InlineAlert>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">{t('settings.virtualCameraStatus')}</span>
+            <StatusBadge tone={isElectron ? 'success' : 'idle'}>
+              {isElectron
+                ? t('settings.virtualCameraAvailable')
+                : t('settings.virtualCameraUnavailable')}
+            </StatusBadge>
+          </div>
+          <p className="text-muted-foreground">{t('settings.virtualCameraHelp')}</p>
+        </div>
+      </AppSurface>
+
+      <AppSurface elevated className="lg:col-span-2">
+        <SectionHeader title={t('settings.updates')} description={t('settings.updatesDescription')} />
+        <div className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                {updateState.status === 'downloaded' ? (
+                  <CheckCircle2 className="size-4 text-success" />
+                ) : updateState.status === 'installing' ? (
+                  <Rocket className="size-4 text-primary" />
                 ) : (
-                  <Download className="w-4 h-4 mr-2" />
-                )}
-                {getUpdateButtonLabel(updateState.status, t)}
-              </TextureButton>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <TextureCard contentClassName="p-4">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('settings.currentVersion')}</p>
-                <p className="text-lg font-semibold text-white">{updateState.currentVersion}</p>
-              </TextureCard>
-              <TextureCard contentClassName="p-4">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('settings.latestVersion')}</p>
-                <p className="text-lg font-semibold text-white">{updateState.latestVersion || t('common.unknown')}</p>
-              </TextureCard>
-              <TextureCard contentClassName="p-4">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('settings.installMode')}</p>
-                <p className="text-lg font-semibold text-white">
-                  {updateState.canAutoInstall
-                    ? t('settings.automatic')
-                    : updateState.isElectron
-                      ? t('settings.downloadOnly')
-                      : t('settings.browser')}
-                </p>
-              </TextureCard>
-            </div>
-
-            {(updateState.status === 'downloading' || updateState.status === 'installing' || updateState.status === 'downloaded') && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{t('settings.updateProgress')}</span>
-                  <span>{Math.max(0, Math.min(100, updateState.progress))}%</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full border border-border/70 bg-background/70">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300"
-                    style={{ width: `${Math.max(4, Math.min(100, updateState.progress || 0))}%` }}
+                  <RefreshCw
+                    className={`size-4 ${isUpdaterBusy ? 'animate-spin text-primary' : 'text-muted-foreground'}`}
                   />
-                </div>
+                )}
+                <p className="text-[13px] font-medium text-foreground">{t('settings.updateStatus')}</p>
               </div>
-            )}
-
-            {updateState.downloadedFileName && (
+              <p className="text-[13px] text-foreground/90">{updateState.message}</p>
               <p className="text-xs text-muted-foreground">
-                {t('settings.downloadedPackage', { name: updateState.downloadedFileName })}
+                {t('settings.lastChecked', { when: checkedAtLabel })}
               </p>
-            )}
-
-            {releaseNotes && (
-              <TextureCard contentClassName="p-4">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">{t('settings.releaseNotes')}</p>
-                <p className="whitespace-pre-wrap text-sm text-foreground/90">{releaseNotes}</p>
-              </TextureCard>
-            )}
-
-            {!updateState.isElectron && (
-              <p className="text-xs text-muted-foreground">{t('settings.electronRequired')}</p>
-            )}
-
-            {updateState.isElectron && !updateState.isPackaged && (
-              <p className="text-xs text-muted-foreground">{t('settings.devModeNote')}</p>
-            )}
-
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-white tracking-tight">{t('settings.profile')}</CardTitle>
-            <CardDescription className="text-xs">{t('settings.profileDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm font-medium text-muted-foreground">{t('settings.fullName')}</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="h-11 bg-background/70"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium text-muted-foreground">{t('settings.emailAddress')}</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 bg-background/70"
-                />
-              </div>
             </div>
-            <CosmicButton
-              as="button"
-              onClick={handleSaveProfile}
-              disabled={isSaving}
+            <AppButton
+              onClick={() => void handleCheckForUpdates()}
+              disabled={!updateState.isElectron || isUpdaterBusy}
+              className="sm:min-w-[190px]"
             >
-              {isSaving ? t('common.saving') : t('settings.saveChanges')}
-            </CosmicButton>
-          </CardContent>
-        </Card>
+              {isUpdaterBusy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : updateState.status === 'downloaded' ? (
+                <Rocket className="size-4" />
+              ) : (
+                <Download className="size-4" />
+              )}
+              {getUpdateButtonLabel(updateState.status, t)}
+            </AppButton>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-white tracking-tight">{t('settings.notifications')}</CardTitle>
-            <CardDescription className="text-xs">{t('settings.notificationsDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium text-white">{t('settings.emailNotifications')}</Label>
-                <p className="text-xs text-muted-foreground">{t('settings.emailNotificationsHint')}</p>
-              </div>
-              <Switch defaultChecked />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-white/[0.08] p-3">
+              <p className="text-xs text-muted-foreground">{t('settings.currentVersion')}</p>
+              <p className="mt-1 text-[15px] font-semibold">{updateState.currentVersion}</p>
             </div>
-            <Separator className="bg-border/70" />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium text-white">{t('settings.lowCreditAlerts')}</Label>
-                <p className="text-xs text-muted-foreground">{t('settings.lowCreditAlertsHint')}</p>
-              </div>
-              <Switch defaultChecked />
+            <div className="rounded-lg border border-white/[0.08] p-3">
+              <p className="text-xs text-muted-foreground">{t('settings.latestVersion')}</p>
+              <p className="mt-1 text-[15px] font-semibold">
+                {updateState.latestVersion || t('common.unknown')}
+              </p>
             </div>
-            <Separator className="bg-border/70" />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium text-white">{t('settings.marketingEmails')}</Label>
-                <p className="text-xs text-muted-foreground">{t('settings.marketingEmailsHint')}</p>
-              </div>
-              <Switch />
+            <div className="rounded-lg border border-white/[0.08] p-3">
+              <p className="text-xs text-muted-foreground">{t('settings.installMode')}</p>
+              <p className="mt-1 text-[15px] font-semibold">
+                {updateState.canAutoInstall
+                  ? t('settings.automatic')
+                  : updateState.isElectron
+                    ? t('settings.downloadOnly')
+                    : t('settings.browser')}
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-white tracking-tight">{t('settings.danger')}</CardTitle>
-            <CardDescription className="text-xs">{t('settings.dangerDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium text-white">{t('settings.signOutLabel')}</Label>
-                <p className="text-xs text-muted-foreground">{t('settings.signOutHint')}</p>
+          {(updateState.status === 'downloading' ||
+            updateState.status === 'installing' ||
+            updateState.status === 'downloaded') && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{t('settings.updateProgress')}</span>
+                <span>{Math.max(0, Math.min(100, updateState.progress))}%</span>
               </div>
-              <TextureButton
-                onClick={logout}
-                variant="destructive"
-              >
-                {t('common.signOut')}
-              </TextureButton>
+              <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                <div
+                  className="h-full rounded-full bg-primary transition-ui"
+                  style={{ width: `${Math.max(4, Math.min(100, updateState.progress || 0))}%` }}
+                />
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+
+          {updateState.downloadedFileName ? (
+            <p className="text-xs text-muted-foreground">
+              {t('settings.downloadedPackage', { name: updateState.downloadedFileName })}
+            </p>
+          ) : null}
+
+          {releaseNotes ? (
+            <div className="rounded-lg border border-white/[0.08] p-3">
+              <p className="mb-2 text-xs text-muted-foreground">{t('settings.releaseNotes')}</p>
+              <p className="whitespace-pre-wrap text-[13px] text-foreground/90">{releaseNotes}</p>
+            </div>
+          ) : null}
+
+          {!updateState.isElectron ? (
+            <p className="text-xs text-muted-foreground">{t('settings.electronRequired')}</p>
+          ) : null}
+          {updateState.isElectron && !updateState.isPackaged ? (
+            <p className="text-xs text-muted-foreground">{t('settings.devModeNote')}</p>
+          ) : null}
+        </div>
+      </AppSurface>
+
+      <AppSurface elevated>
+        <SectionHeader title={t('settings.account')} description={t('settings.accountDescription')} />
+        <dl className="grid gap-3 text-[13px] sm:grid-cols-2">
+          <div>
+            <dt className="text-muted-foreground">{t('settings.fullName')}</dt>
+            <dd className="font-medium text-foreground">{user?.name || t('common.user')}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">{t('settings.emailAddress')}</dt>
+            <dd className="font-medium text-foreground">{user?.email || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">{t('settings.proLicense')}</dt>
+            <dd>
+              <StatusBadge tone={proAccess.active ? 'success' : 'idle'}>
+                {proAccess.active ? t('settings.proActive') : t('settings.proInactive')}
+              </StatusBadge>
+            </dd>
+          </div>
+          {user?.isAdmin ? (
+            <div>
+              <dt className="text-muted-foreground">{t('settings.adminStatus')}</dt>
+              <dd className="font-medium text-foreground">{t('common.adminBadge')}</dd>
+            </div>
+          ) : null}
+        </dl>
+        <div className="mt-4">
+          <AppButton variant="danger" onClick={logout}>
+            {t('common.signOut')}
+          </AppButton>
+        </div>
+      </AppSurface>
+
+      <AppSurface elevated>
+        <SectionHeader title={t('settings.legal')} description={t('settings.legalDescription')} />
+        <p className="mb-3 text-[13px] text-muted-foreground">
+          {t('settings.legalAcceptedVersions')}: {LEGAL_VERSION}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <AppButton variant="secondary" onClick={() => setLegalDoc('terms')}>
+            {t('settings.legalOpenTerms')}
+          </AppButton>
+          <AppButton variant="secondary" onClick={() => setLegalDoc('privacy')}>
+            {t('settings.legalOpenPrivacy')}
+          </AppButton>
+        </div>
+      </AppSurface>
       </div>
+
+      <AppDialog open={Boolean(legalDoc)} onOpenChange={(open) => !open && setLegalDoc(null)}>
+        <AppDialogContent className="max-h-[85vh] sm:max-w-2xl">
+          <AppDialogHeader>
+            <AppDialogTitle>
+              {legalDoc === 'privacy'
+                ? t('settings.legalOpenPrivacy')
+                : t('settings.legalOpenTerms')}
+            </AppDialogTitle>
+          </AppDialogHeader>
+          <div className="custom-scrollbar max-h-[60vh] overflow-y-auto pr-1">
+            <LegalDocuments locale={locale} />
+          </div>
+        </AppDialogContent>
+      </AppDialog>
     </div>
   );
 }

@@ -1,40 +1,27 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { CosmicButton } from '@/components/ui/cosmic-button';
-import { TextureButton } from '@/components/ui/texture-button';
-import { TextureOverlay } from '@/components/ui/texture-overlay';
+import { AppButton } from '@/components/app';
 import { Home, ArrowLeft } from 'lucide-react';
+import { ROUTES } from '@/lib/routes';
 
 function NotFound() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
-    <div className="relative isolate flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-4 text-center">
-      <TextureOverlay texture="grid" opacity={0.08} className="[mask-image:radial-gradient(circle_at_center,black,transparent_70%)]" />
-      <div className="mb-8">
-        <h1 className="mb-4 bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-[150px] font-black leading-none text-transparent">
-          404
-        </h1>
-        <div className="mx-auto mb-6 h-1 w-16 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" />
-      </div>
-      <h2 className="text-2xl font-bold text-white mb-3">{t('notFound.title')}</h2>
-      <p className="mb-8 max-w-md text-muted-foreground">
-        {t('notFound.body')}
-      </p>
-      <div className="flex flex-col sm:flex-row gap-3">
-        <CosmicButton as="button" onClick={() => navigate('/dashboard')}>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
+      <p className="mb-2 text-5xl font-semibold tabular-nums text-muted-foreground">404</p>
+      <h1 className="mb-2 text-xl font-semibold text-foreground">{t('notFound.title')}</h1>
+      <p className="mb-8 max-w-md text-[13px] text-muted-foreground">{t('notFound.body')}</p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <AppButton onClick={() => navigate(ROUTES.PROTECTED.DASHBOARD)}>
           <Home className="size-4" />
           {t('notFound.home')}
-        </CosmicButton>
-        <TextureButton
-          variant="secondary"
-          size="lg"
-          onClick={() => window.history.back()}
-        >
+        </AppButton>
+        <AppButton variant="secondary" onClick={() => window.history.back()}>
           <ArrowLeft className="size-4" />
           {t('notFound.goBack')}
-        </TextureButton>
+        </AppButton>
       </div>
     </div>
   );

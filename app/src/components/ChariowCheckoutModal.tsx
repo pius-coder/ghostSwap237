@@ -11,8 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CosmicButton } from '@/components/ui/cosmic-button';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton, AppSurface, IconButton } from '@/components/app';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api-client';
 import { formatCredits, formatCurrency } from '@/i18n/format';
@@ -130,7 +129,7 @@ export function ChariowCheckoutModal({ isOpen, onClose, plan }: ChariowCheckoutM
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md border-blue-500/20 bg-card">
+      <DialogContent className="max-w-md bg-card">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Globe2 className="size-5 text-primary" />
@@ -186,11 +185,11 @@ export function ChariowCheckoutModal({ isOpen, onClose, plan }: ChariowCheckoutM
               <p className="text-xs text-muted-foreground">{t('payments.phoneHint')}</p>
             </div>
             <div className="flex gap-2 pt-2">
-              <TextureButton variant="minimal" className="flex-1" onClick={onClose} disabled={submitting}>{t('common.cancel')}</TextureButton>
-              <CosmicButton as="button" className="flex-1" contentClassName="min-h-11" disabled={submitting} onClick={() => void handlePay()}>
+              <AppButton variant="ghost" className="flex-1" onClick={onClose} disabled={submitting}>{t('common.cancel')}</AppButton>
+              <AppButton className="flex-1" disabled={submitting} onClick={() => void handlePay()}>
                 {submitting && <Loader2 className="size-4 animate-spin" />}
                 {t('payments.continueChariow')}
-              </CosmicButton>
+              </AppButton>
             </div>
           </div>
         )}

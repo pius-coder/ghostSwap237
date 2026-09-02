@@ -2,10 +2,8 @@
 // A persona = portrait + prompt. Selecting one while live restarts the session.
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PanelLeftClose, Plus } from 'lucide-react';
-import { MetalIconButton } from '@/components/ui/metal-button';
-import { TextureCard } from '@/components/ui/texture-card';
-import { TextureButton } from '@/components/ui/texture-button';
+import { Check, Plus, Trash2 } from 'lucide-react';
+import { AppButton, AppSurface, IconButton } from '@/components/app';
 import {
   createPersonaFromFile,
   deletePersona,
@@ -29,12 +27,10 @@ export function PersonaPanel({
   resetNonce,
   sourceStream,
   onActivePersonaChange,
-  onCollapse,
 }: {
   resetNonce: number;
   sourceStream?: MediaStream | null;
   onActivePersonaChange: (persona: Persona | null) => void;
-  onCollapse: () => void;
 }) {
   const { t } = useTranslation();
   const session = useSessionCommands();
@@ -176,53 +172,30 @@ export function PersonaPanel({
   };
 
   return (
-    <section className="flex flex-col">
+    <section className="client-persona-panel flex flex-col">
       <header className="flex items-start justify-between gap-2 px-1 py-3">
         <div className="min-w-0">
-          <p className="kpi-label">{t('studio.persona')}</p>
+          <p className="text-xs font-medium text-muted-foreground">{t('studio.persona')}</p>
           <p className="mt-1 text-xs leading-snug text-muted-foreground">
             {t('studio.personaHint')}
           </p>
         </div>
-        <div className="flex shrink-0 gap-1">
-          <MetalIconButton
-            variant="ghost"
-            strength={0.4}
-            disableGlow
-            aria-label={t('studio.collapsePanel')}
-            title={t('studio.collapsePanel')}
-            onClick={onCollapse}
-          >
-            <PanelLeftClose className="size-4" />
-          </MetalIconButton>
-          <MetalIconButton
-            variant="ghost"
-            strength={0.48}
-            disableGlow
-            aria-label={t('studio.addPersona')}
-            title={t('studio.addPersona')}
-            disabled={busy}
-            onClick={() => setAdding(true)}
-          >
-            <Plus className="size-4" />
-          </MetalIconButton>
-        </div>
       </header>
 
-      <div>
+      <div className="min-h-0">
         {activePersona?.imageUrl ? (
-          <TextureCard className="mb-4 overflow-hidden">
+          <AppSurface elevated className="client-persona-active mb-4 flex overflow-hidden p-2">
             <img
               src={activePersona.imageUrl}
               alt={activePersona.name}
-              className="aspect-[4/5] w-full object-cover"
+              className="h-24 w-[76px] shrink-0 rounded-md object-cover"
             />
-            <div className="px-3 py-2.5">
-              <p className="text-sm font-medium leading-tight text-foreground">{activePersona.name}</p>
-              <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+            <div className="min-w-0 flex-1 px-3 py-1.5">
+              <p className="truncate text-sm font-medium leading-tight text-foreground">{activePersona.name}</p>
+              <p className="mt-1 line-clamp-3 text-[11px] leading-snug text-muted-foreground">
                 {activePersona.prompt || defaultPersonaPrompt()}
               </p>
-              <label className="mt-2 inline-block cursor-pointer text-[11px] text-blue-400 underline-offset-2 hover:underline">
+              <label className="mt-2 inline-flex cursor-pointer items-center text-[11px] font-medium text-foreground underline-offset-2 hover:underline">
                 {t('studio.replacePortrait')}
                 <input
                   ref={fileRef}
@@ -242,38 +215,40 @@ export function PersonaPanel({
                 />
               </label>
             </div>
-          </TextureCard>
+          </AppSurface>
         ) : (
           <p className="mb-4 text-xs text-muted-foreground">
             {t('studio.selectPortrait')}
           </p>
         )}
 
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="kpi-label">{t('studio.library')}</p>
-          <TextureButton
-            variant="accent"
+        <div className="client-persona-library-header mb-2 flex items-center justify-between gap-2 pt-3">
+          <p className="text-xs font-medium text-muted-foreground">{t('studio.library')}</p>
+          <AppButton
+            variant="primary"
             size="sm"
             disabled={busy}
             onClick={() => setAdding(true)}
-            contentClassName="gap-1.5 px-2.5 text-xs"
           >
             <Plus className="size-3.5" />
             {t('studio.addPersona')}
-          </TextureButton>
+          </AppButton>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {personas.map((persona) => {
             const selected = persona.id === activeId;
             return (
-              <div key={persona.id} className="relative">
-                <TextureButton
-                  variant="minimal"
-                  size="sm"
+              <div key={persona.id} className="group relative min-w-0">
+                <button
+                  type="button"
                   disabled={busy}
                   onClick={() => selectPersona(persona)}
-                  className={`w-full overflow-hidden ${selected ? 'ring-2 ring-ring/50' : ''}`}
-                  contentClassName="!block !h-auto !min-h-0 !p-0 text-left"
+                  aria-pressed={selected}
+                  className={`client-persona-card relative block w-full overflow-hidden text-left transition-ui focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 ${
+                    selected
+                      ? 'is-selected'
+                      : ''
+                  }`}
                 >
                   {persona.imageUrl ? (
                     <img src={persona.imageUrl} alt="" className="aspect-square w-full object-cover" />
@@ -282,29 +257,35 @@ export function PersonaPanel({
                       ?
                     </span>
                   )}
-                  <span className="block truncate px-2 py-1.5 text-xs font-medium text-foreground">
+                  <span className="block truncate px-2 py-1.5 text-[11px] font-medium text-foreground">
                     {persona.name}
                   </span>
-                </TextureButton>
-                {selected && (
-                  <TextureButton
-                    variant="destructive"
-                    size="sm"
+                  {selected ? (
+                    <span className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                      <Check className="size-3" />
+                    </span>
+                  ) : null}
+                </button>
+                {selected ? (
+                  <AppButton
+                    variant="danger"
+                    size="icon"
                     disabled={busy}
                     onClick={() => removePersona(persona)}
-                    className="absolute right-1.5 top-1.5"
-                    contentClassName="min-h-6 px-2 text-[10px]"
+                    aria-label={t('studio.delete')}
+                    title={t('studio.delete')}
+                    className="absolute bottom-7 right-1.5 size-7 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
                   >
-                    {t('studio.delete')}
-                  </TextureButton>
-                )}
+                    <Trash2 className="size-3.5" />
+                  </AppButton>
+                ) : null}
               </div>
             );
           })}
         </div>
 
         {!personas.length && !adding && (
-          <p className="empty-panel mt-2 text-xs leading-snug text-muted-foreground">
+          <p className="mt-2 text-xs leading-snug text-muted-foreground">
             {t('studio.noPersonaYet')}
           </p>
         )}

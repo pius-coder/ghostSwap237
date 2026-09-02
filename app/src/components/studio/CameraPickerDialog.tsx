@@ -2,10 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Video, X } from 'lucide-react';
-import { CosmicButton } from '@/components/ui/cosmic-button';
-import { MetalIconButton } from '@/components/ui/metal-button';
-import { TextureCard } from '@/components/ui/texture-card';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton, AppSurface, IconButton } from '@/components/app';
 import {
   listPhysicalCameras,
   openCameraPreview,
@@ -156,11 +153,11 @@ export function CameraPickerDialog({
       role="presentation"
       onClick={onClose}
     >
-      <TextureCard
+      <AppSurface elevated
         role="dialog"
         aria-modal="true"
         aria-labelledby="camera-picker-title"
-        className="w-full max-w-3xl"
+        className="workspace-panel w-full max-w-3xl overflow-hidden rounded-2xl p-0"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4">
@@ -172,20 +169,17 @@ export function CameraPickerDialog({
               {t('studio.cameraPickerSubtitle')}
             </p>
           </div>
-          <MetalIconButton
-            variant="ghost"
-            strength={0.4}
-            disableGlow
-            aria-label={t('common.close')}
+          <IconButton
+            label={t('common.close')}
             onClick={onClose}
           >
             <X className="size-4" />
-          </MetalIconButton>
+          </IconButton>
         </div>
 
-        <div className="grid gap-5 px-5 pb-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <div className="min-h-[200px]">
-            <p className="kpi-label">{t('studio.physicalCameras')}</p>
+        <div className="grid min-h-[360px] border-t border-white/[0.06] md:grid-cols-[260px_minmax(0,1fr)]">
+          <div className="border-b border-white/[0.06] p-4 md:border-b-0 md:border-r">
+            <p className="text-xs font-medium text-muted-foreground">{t('studio.physicalCameras')}</p>
             {listing && <p className="mt-3 text-sm text-muted-foreground">{t('studio.scanning')}</p>}
             {!listing && !cameras.length && (
               <p className="mt-3 text-sm text-muted-foreground">
@@ -197,21 +191,20 @@ export function CameraPickerDialog({
                 const active = camera.deviceId === selectedId;
                 return (
                   <li key={camera.deviceId}>
-                    <TextureButton
-                      variant={active ? 'accent' : 'minimal'}
+                    <AppButton
+                      variant={active ? 'secondary' : 'ghost'}
                       size="sm"
                       onClick={() => setSelectedId(camera.deviceId)}
-                      className="w-full"
-                      contentClassName="justify-start py-2.5"
+                      className="w-full justify-start rounded-lg"
                     >
                       <Video className="size-4 shrink-0" />
                       <span className="min-w-0 flex-1 truncate">{camera.label}</span>
-                    </TextureButton>
+                    </AppButton>
                   </li>
                 );
               })}
             </ul>
-            <TextureButton
+            <AppButton
               variant="secondary"
               size="sm"
               onClick={() => void refreshCameras()}
@@ -219,12 +212,12 @@ export function CameraPickerDialog({
               className="mt-3"
             >
               {t('studio.refreshList')}
-            </TextureButton>
+            </AppButton>
           </div>
 
-          <div>
-            <p className="kpi-label">{t('studio.previewLabel')}</p>
-            <div className="relative mt-3 aspect-video overflow-hidden rounded-xl border border-border bg-black">
+          <div className="p-4">
+            <p className="text-xs font-medium text-muted-foreground">{t('studio.previewLabel')}</p>
+            <div className="relative mt-3 aspect-video overflow-hidden rounded-xl border border-white/[0.08] bg-black">
               <video
                 ref={videoRef}
                 autoPlay
@@ -241,7 +234,7 @@ export function CameraPickerDialog({
               )}
               {previewLoading && !previewError && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70">
-                  <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500/40 border-t-blue-400" />
+                  <span className="size-6 animate-spin rounded-full border-2 border-white/20 border-t-foreground" />
                   <p className="text-sm text-white/80">{t('studio.openingCamera')}</p>
                 </div>
               )}
@@ -263,24 +256,22 @@ export function CameraPickerDialog({
           <p className="bg-red-500/10 px-5 py-2 text-xs text-red-400">{error ?? previewError}</p>
         )}
 
-        <div className="flex justify-end gap-2 px-5 py-4">
-          <TextureButton
-            variant="minimal"
+        <div className="flex justify-end gap-2 border-t border-white/[0.06] px-5 py-4">
+          <AppButton
+            variant="ghost"
             onClick={onClose}
           >
             {t('common.cancel')}
-          </TextureButton>
-          <CosmicButton
-            as="button"
+          </AppButton>
+          <AppButton
             disabled={!canConfirm}
             onClick={confirm}
             className="min-h-9"
-            contentClassName="min-h-8 px-4 py-1"
           >
             {previewLoading ? t('studio.opening') : t('studio.useThisCamera')}
-          </CosmicButton>
+          </AppButton>
         </div>
-      </TextureCard>
+      </AppSurface>
     </div>
   );
 }

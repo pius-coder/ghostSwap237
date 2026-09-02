@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { TextureButton } from '@/components/ui/texture-button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { AppButton } from '@/components/app';
 import { LegalDocuments } from '@/components/LegalDocuments';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -44,10 +50,10 @@ export function LaunchPrivacyNotice() {
           <DialogTitle>{t('legal.launchTitle')}</DialogTitle>
           <DialogDescription>{t('legal.launchBody')}</DialogDescription>
         </DialogHeader>
-        <div className="custom-scrollbar max-h-[60vh] overflow-y-auto rounded-lg border border-border p-4">
+        <div className="custom-scrollbar max-h-[60vh] overflow-y-auto rounded-lg border border-white/[0.08] p-4">
           <LegalDocuments />
         </div>
-        <TextureButton onClick={close}>{t('legal.launchAck')}</TextureButton>
+        <AppButton onClick={close}>{t('legal.launchAck')}</AppButton>
       </DialogContent>
     </Dialog>
   );

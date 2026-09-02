@@ -1,6 +1,6 @@
 import { Component } from 'react';
 import type { ReactNode } from 'react';
-import { CosmicButton } from '@/components/ui/cosmic-button';
+import { AppButton } from '@/components/app';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { i18n } from '@/i18n';
 
@@ -36,22 +36,21 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <div className="max-w-md w-full text-center fade-in-up">
-            <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle className="w-8 h-8 text-red-500" />
+        <div className="flex min-h-screen items-center justify-center bg-background p-4">
+          <div className="w-full max-w-md text-center">
+            <div className="mx-auto mb-6 flex size-14 items-center justify-center rounded-lg bg-destructive/10">
+              <AlertTriangle className="size-7 text-destructive" />
             </div>
-            <h1 className="text-2xl font-bold title-tight mb-2">{i18n.t('errorBoundary.title')}</h1>
-            <p className="text-muted-foreground mb-6">
+            <h1 className="mb-2 text-xl font-semibold text-foreground">
+              {i18n.t('errorBoundary.title')}
+            </h1>
+            <p className="mb-6 text-[13px] text-muted-foreground">
               {this.state.error?.message || i18n.t('errors.UNEXPECTED')}
             </p>
-            <CosmicButton
-              as="button"
-              onClick={this.handleReload}
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
+            <AppButton onClick={this.handleReload}>
+              <RefreshCw className="size and-4" />
               {i18n.t('errorBoundary.reload')}
-            </CosmicButton>
+            </AppButton>
           </div>
         </div>
       );

@@ -6,9 +6,10 @@ export type LiveProvider = 'fast' | 'pro';
 // v3 ignores legacy Morphly preferences so users cannot boot into PRO before
 // the current account-bound entitlement has been checked.
 const KEY = 'henshin.liveProvider.v3';
+export const LIVE_PROVIDER_CHANGE_EVENT = 'henshin:live-provider-change';
 
 export const LIVE_PROVIDER_OPTIONS: { value: LiveProvider; label: string; hint: string }[] = [
-  { value: 'fast', label: 'Fast', hint: 'Reactor X2' },
+  { value: 'fast', label: 'X2', hint: 'Reactor' },
   { value: 'pro', label: 'PRO', hint: 'fal.ai Lucy 2.5' },
 ];
 
@@ -31,6 +32,7 @@ export function loadLiveProvider(): LiveProvider {
 export function saveLiveProvider(provider: LiveProvider): void {
   try {
     localStorage.setItem(KEY, provider);
+    window.dispatchEvent(new CustomEvent(LIVE_PROVIDER_CHANGE_EVENT, { detail: provider }));
   } catch {
     /* best effort */
   }

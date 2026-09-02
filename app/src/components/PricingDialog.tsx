@@ -12,9 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { FapshiPaymentModal } from '@/components/FapshiPaymentModal';
 import { ChariowCheckoutModal } from '@/components/ChariowCheckoutModal';
-import { CosmicButton } from '@/components/ui/cosmic-button';
-import { TextureCard } from '@/components/ui/texture-card';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton, AppSurface, IconButton } from '@/components/app';
 import { PricingDialogContext } from '@/hooks/usePricingDialog';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api-client';
@@ -109,17 +107,19 @@ export function PricingDialogProvider({ children }: { children: ReactNode }) {
       {children}
 
       <Dialog open={dialogOpen} onOpenChange={handlePricingOpenChange}>
-        <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] !max-w-[1120px] gap-0 overflow-hidden border-blue-500/15 bg-background/95 p-0 shadow-none backdrop-blur-xl sm:!max-w-[1120px]">
-          <div className="custom-scrollbar overflow-y-auto px-4 py-8 sm:px-7 lg:px-10 lg:py-10">
-            <DialogHeader className="mx-auto mb-8 max-w-3xl items-center text-center sm:text-center">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t('payments.creditsHeading')}</p>
-              <DialogTitle className="bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl">
+        <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] !max-w-[1120px] gap-0 overflow-hidden bg-background p-0 sm:!max-w-[1120px]">
+          <div className="custom-scrollbar overflow-y-auto">
+            <DialogHeader className="border-b border-white/[0.08] px-6 py-6 sm:px-8">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{t('payments.creditsHeading')}</p>
+              <DialogTitle className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                 {t('payments.payPerUse')}
               </DialogTitle>
-              <DialogDescription className="max-w-xl leading-relaxed">
+              <DialogDescription className="max-w-2xl leading-relaxed">
                 {t('payments.packsIntro')}
               </DialogDescription>
             </DialogHeader>
+
+            <div className="px-4 py-6 sm:px-6 lg:px-8">
 
             {loading ? (
               <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-muted-foreground">
@@ -127,13 +127,13 @@ export function PricingDialogProvider({ children }: { children: ReactNode }) {
                 {t('payments.loadingPackages')}
               </div>
             ) : plans.length === 0 ? (
-              <div className="rounded-2xl border border-blue-500/15 bg-panel/70 px-6 py-14 text-center text-sm text-muted-foreground">
+              <div className="rounded-xl border border-white/[0.08] bg-panel px-6 py-14 text-center text-sm text-muted-foreground">
                 {t('payments.noPackages')}
               </div>
             ) : selectedPlan ? (
               <div className="mx-auto max-w-xl space-y-5">
-                <div className="rounded-2xl border border-border/70 bg-panel/60 p-5">
-                  <p className="text-sm font-semibold uppercase tracking-[0.08em] text-primary">{selectedPlan.name}</p>
+                <div className="rounded-xl border border-border bg-panel p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{selectedPlan.name}</p>
                   <p className="mt-2 text-2xl font-semibold text-foreground">
                     {t('payments.selectedCredits', { count: formatCredits(selectedPlan.credits, locale) })}
                   </p>
@@ -145,7 +145,7 @@ export function PricingDialogProvider({ children }: { children: ReactNode }) {
                   </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <TextureButton
+                  <AppButton
                     variant="secondary"
                     size="lg"
                     className="h-auto min-h-24 flex-col items-start gap-2 p-4 text-left"
@@ -156,13 +156,13 @@ export function PricingDialogProvider({ children }: { children: ReactNode }) {
                     }}
                   >
                     <span className="flex items-center gap-2 font-semibold text-foreground">
-                      <Smartphone className="size-4 text-primary" /> {t('payments.cameroonMobile')}
+                      <Smartphone className="size-4" /> {t('payments.cameroonMobile')}
                     </span>
                     <span className="text-sm text-muted-foreground">
                       {t('payments.fapshiPrice', { price: formatCurrency(selectedPlan.priceXAF, 'XAF', locale) })}
                     </span>
-                  </TextureButton>
-                  <TextureButton
+                  </AppButton>
+                  <AppButton
                     variant="secondary"
                     size="lg"
                     className="h-auto min-h-24 flex-col items-start gap-2 p-4 text-left"
@@ -175,42 +175,42 @@ export function PricingDialogProvider({ children }: { children: ReactNode }) {
                     }}
                   >
                     <span className="flex items-center gap-2 font-semibold text-foreground">
-                      <Globe2 className="size-4 text-primary" /> {t('payments.internationalCard')}
+                      <Globe2 className="size-4" /> {t('payments.internationalCard')}
                     </span>
                     <span className="text-sm text-muted-foreground">
                       {t('payments.chariowPrice', { price: formatCurrency(selectedPlan.priceUSD, 'USD', locale) })}
                     </span>
-                  </TextureButton>
+                  </AppButton>
                 </div>
                 {!selectedPlan.chariowEnabled && (
                   <p className="text-center text-xs text-muted-foreground" data-testid="chariow-disabled-message">
                     {t('payments.chariowDisabled')}
                   </p>
                 )}
-                <TextureButton variant="minimal" className="w-full" onClick={() => setSelectedPlan(null)}>
+                <AppButton variant="ghost" className="w-full" onClick={() => setSelectedPlan(null)}>
                   {t('payments.backToPacks')}
-                </TextureButton>
+                </AppButton>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {plans.map((plan, index) => {
                   const popular = index === popularIndex;
                   return (
-                    <TextureCard
+                    <AppSurface elevated
                       key={plan.id}
-                      className={`pricing-card relative min-h-[360px] overflow-hidden ${popular ? 'ring-1 ring-primary/60' : ''}`}
+                      className={`pricing-card relative min-h-[340px] overflow-hidden ${popular ? 'border-white/20 bg-surface-elevated' : ''}`}
                     >
-                      {popular && <div className="pricing-card-glow" aria-hidden />}
-                      <div className="relative flex flex-1 flex-col gap-7 p-6 sm:p-7">
+                      {popular && <div className="hidden" aria-hidden />}
+                      <div className="relative flex flex-1 flex-col gap-6 p-5">
                         <div className="flex min-h-8 items-center justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-2">
-                            <Coins className="size-5 shrink-0 text-primary" strokeWidth={1.75} />
+                            <Coins className="size-5 shrink-0 text-foreground/70" strokeWidth={1.75} />
                             <span className="truncate text-sm font-semibold uppercase tracking-[0.08em] text-foreground">
                               {plan.name || t('payments.selectedCredits', { count: formatCredits(plan.credits, locale) })}
                             </span>
                           </div>
                           {popular && (
-                            <span className="flex shrink-0 items-center gap-1 rounded-lg border border-primary/25 bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
+                            <span className="flex shrink-0 items-center gap-1 rounded-md border border-white/[0.10] bg-white/[0.06] px-2 py-1 text-xs font-semibold text-foreground">
                               <Zap className="size-3.5" />
                               {t('payments.popular')}
                             </span>
@@ -228,34 +228,34 @@ export function PricingDialogProvider({ children }: { children: ReactNode }) {
 
                         <ul className="flex flex-1 flex-col gap-3 text-sm text-muted-foreground">
                           <li className="flex gap-2.5">
-                            <Check className="mt-0.5 size-[18px] shrink-0 text-primary" />
+                            <Check className="mt-0.5 size-[18px] shrink-0 text-success" />
                             <span>{t('payments.henshinCredits', { count: formatCredits(plan.credits, locale) })}</span>
                           </li>
                           <li className="flex gap-2.5">
-                            <Check className="mt-0.5 size-[18px] shrink-0 text-primary" />
+                            <Check className="mt-0.5 size-[18px] shrink-0 text-success" />
                             <span>{t('payments.aboutFast', { duration: formatDurationFromCredits(plan.credits, 2, locale) })}</span>
                           </li>
                           <li className="flex gap-2.5">
-                            <Check className="mt-0.5 size-[18px] shrink-0 text-primary" />
+                            <Check className="mt-0.5 size-[18px] shrink-0 text-success" />
                             <span>{t('payments.aboutPro', { duration: formatDurationFromCredits(plan.credits, 80, locale) })}</span>
                           </li>
                           <li className="flex gap-2.5">
-                            <Check className="mt-0.5 size-[18px] shrink-0 text-primary" />
+                            <Check className="mt-0.5 size-[18px] shrink-0 text-success" />
                             <span>{t('payments.neverExpire')}</span>
                           </li>
                         </ul>
 
                         {popular ? (
-                          <CosmicButton as="button" onClick={() => setSelectedPlan(plan)} className="w-full" contentClassName="min-h-12">
+                          <AppButton onClick={() => setSelectedPlan(plan)} className="w-full">
                             {t('payments.choosePack')}
-                          </CosmicButton>
+                          </AppButton>
                         ) : (
-                          <TextureButton variant="secondary" size="lg" onClick={() => setSelectedPlan(plan)} className="w-full">
+                          <AppButton variant="secondary" size="lg" onClick={() => setSelectedPlan(plan)} className="w-full">
                             {t('payments.choosePack')}
-                          </TextureButton>
+                          </AppButton>
                         )}
                       </div>
-                    </TextureCard>
+                    </AppSurface>
                   );
                 })}
               </div>
@@ -264,6 +264,7 @@ export function PricingDialogProvider({ children }: { children: ReactNode }) {
             <p className="mt-7 text-center text-xs text-muted-foreground">
               {t('payments.fastRateNote')}
             </p>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -1,38 +1,56 @@
-import { LayoutDashboard, Coins, CreditCard, Settings, ShieldAlert, type ComponentType } from 'lucide-react';
+import {
+  LayoutDashboard,
+  History,
+  Coins,
+  Settings,
+  ShieldAlert,
+  type ComponentType,
+} from 'lucide-react';
 import { ROUTES } from '@/lib/routes';
 import type { TFunction } from 'i18next';
 
-interface NavItemBase {
-  labelKey: 'nav.dashboard' | 'nav.credits' | 'nav.buyCredits' | 'nav.settings' | 'nav.admin';
+export type NavLabelKey =
+  | 'nav.studio'
+  | 'nav.history'
+  | 'nav.wallet'
+  | 'nav.settings'
+  | 'nav.admin'
+  | 'nav.dashboard'
+  | 'nav.credits';
+
+export interface NavLinkItem {
+  path: string;
+  labelKey: NavLabelKey;
   icon: ComponentType<{ className?: string; strokeWidth?: number }>;
 }
 
-export interface NavLinkItem extends NavItemBase {
-  path: string;
-  action?: never;
+export interface NavGroup {
+  id: 'workspace' | 'account' | 'admin';
+  labelKey: 'nav.groupWorkspace' | 'nav.groupAccount' | 'nav.groupAdmin';
+  items: NavLinkItem[];
 }
 
-export interface NavActionItem extends NavItemBase {
-  action: 'buy-credits';
-  path?: never;
-}
+export const WORKSPACE_NAV: NavLinkItem[] = [
+  { path: ROUTES.PROTECTED.DASHBOARD, labelKey: 'nav.studio', icon: LayoutDashboard },
+  { path: ROUTES.PROTECTED.HISTORY, labelKey: 'nav.history', icon: History },
+];
 
-export type NavItem = NavLinkItem | NavActionItem;
-
-export const HENSHIN_NAV: NavItem[] = [
-  { path: ROUTES.PROTECTED.DASHBOARD, labelKey: 'nav.dashboard', icon: LayoutDashboard },
-  { path: ROUTES.PROTECTED.WALLET, labelKey: 'nav.credits', icon: Coins },
-  { action: 'buy-credits', labelKey: 'nav.buyCredits', icon: CreditCard },
+export const ACCOUNT_NAV: NavLinkItem[] = [
+  { path: ROUTES.PROTECTED.WALLET, labelKey: 'nav.wallet', icon: Coins },
   { path: ROUTES.PROTECTED.SETTINGS, labelKey: 'nav.settings', icon: Settings },
 ];
 
-export const ADMIN_NAV: NavItem[] = [
+export const ADMIN_NAV: NavLinkItem[] = [
   { path: ROUTES.PROTECTED.ADMIN_DASHBOARD, labelKey: 'nav.admin', icon: ShieldAlert },
 ];
 
-const PAGE_TITLE_KEYS: Array<{ path: string; labelKey: NavItemBase['labelKey'] }> = [
-  { path: ROUTES.PROTECTED.DASHBOARD, labelKey: 'nav.dashboard' },
-  { path: ROUTES.PROTECTED.WALLET, labelKey: 'nav.credits' },
+/** @deprecated Prefer WORKSPACE_NAV + ACCOUNT_NAV */
+export const HENSHIN_NAV: NavLinkItem[] = [...WORKSPACE_NAV, ...ACCOUNT_NAV];
+
+const PAGE_TITLE_KEYS: Array<{ path: string; labelKey: NavLabelKey }> = [
+  { path: ROUTES.PROTECTED.DASHBOARD, labelKey: 'nav.studio' },
+  { path: ROUTES.PROTECTED.HISTORY, labelKey: 'nav.history' },
+  { path: ROUTES.PROTECTED.WALLET, labelKey: 'nav.wallet' },
   { path: ROUTES.PROTECTED.SETTINGS, labelKey: 'nav.settings' },
   { path: ROUTES.PROTECTED.ADMIN_DASHBOARD, labelKey: 'nav.admin' },
 ];

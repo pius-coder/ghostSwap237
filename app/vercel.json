@@ -17,6 +17,14 @@
       "destination": "/api/pro?route=admin"
     },
     {
+      "source": "/api/support",
+      "destination": "/api/pro?route=support"
+    },
+    {
+      "source": "/api/dispatch-notifications",
+      "destination": "/api/pro?route=dispatch-notifications"
+    },
+    {
       "source": "/api/fal-realtime-token",
       "destination": "/api/pro?route=fal-realtime-token"
     },

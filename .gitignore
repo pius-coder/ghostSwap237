@@ -19,6 +19,8 @@ app/release-validation/
 app/dist/
 native-camera/build/
 native-camera-v2/**/build/
+.baileys-auth/
+app/.baileys-auth/
 *.obj
 .tools/
 .vercel/

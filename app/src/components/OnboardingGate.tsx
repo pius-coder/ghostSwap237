@@ -3,13 +3,19 @@ import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { TextureButton } from '@/components/ui/texture-button';
-import { CosmicButton } from '@/components/ui/cosmic-button';
+import { AppButton } from '@/components/app';
 import { LegalDocuments } from '@/components/LegalDocuments';
 import { useLocalePreference } from '@/i18n/useLocalePreference';
 import { type AppLocale } from '@/i18n/locale';
+import { cn } from '@/lib/utils';
 
 type Step = 1 | 2 | 3;
 
@@ -65,17 +71,19 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
   if (!user) return <>{children}</>;
   if (loadError) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-6">
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="max-w-md space-y-4 text-center">
-          <h1 ref={titleRef} tabIndex={-1} className="text-xl font-semibold">{t('onboarding.loadError')}</h1>
-          <CosmicButton as="button" onClick={() => void loadStatus()}>{t('common.retry')}</CosmicButton>
+          <h1 ref={titleRef} tabIndex={-1} className="text-xl font-semibold">
+            {t('onboarding.loadError')}
+          </h1>
+          <AppButton onClick={() => void loadStatus()}>{t('common.retry')}</AppButton>
         </div>
       </div>
     );
   }
   if (!status) {
     return (
-      <div className="flex min-h-screen items-center justify-center gap-2 text-sm text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center gap-2 bg-background text-[13px] text-muted-foreground">
         <Loader2 className="size-4 animate-spin" /> {t('common.loading')}
       </div>
     );
@@ -120,7 +128,9 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
         aria-labelledby={titleId}
       >
         <DialogHeader>
-          <p className="text-xs text-muted-foreground">{t('onboarding.stepLabel', { current: step, total: 3 })}</p>
+          <p className="text-xs text-muted-foreground">
+            {t('onboarding.stepLabel', { current: step, total: 3 })}
+          </p>
           <DialogTitle id={titleId} ref={titleRef} tabIndex={-1}>
             {step === 1 && t('onboarding.languageTitle')}
             {step === 2 && t('onboarding.productTitle')}
@@ -134,20 +144,29 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
         </DialogHeader>
 
         {step === 1 && (
-          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label={t('onboarding.languageTitle')}>
-            {([
-              { code: 'fr' as const, label: t('locale.french') },
-              { code: 'en' as const, label: t('locale.english') },
-            ]).map((option) => (
+          <div
+            className="grid gap-3 sm:grid-cols-2"
+            role="radiogroup"
+            aria-label={t('onboarding.languageTitle')}
+          >
+            {(
+              [
+                { code: 'fr' as const, label: t('locale.french') },
+                { code: 'en' as const, label: t('locale.english') },
+              ] as const
+            ).map((option) => (
               <button
                 key={option.code}
                 type="button"
                 role="radio"
                 aria-checked={selectedLocale === option.code}
                 aria-current={selectedLocale === option.code ? 'true' : undefined}
-                className={`rounded-xl border p-4 text-left ${
-                  selectedLocale === option.code ? 'border-primary bg-primary/10' : 'border-border'
-                }`}
+                className={cn(
+                  'rounded-lg border p-4 text-left transition-ui',
+                  selectedLocale === option.code
+                    ? 'border-primary bg-primary/10'
+                    : 'border-white/[0.08]',
+                )}
                 onClick={() => void setLocale(option.code).then(() => setSelectedLocale(option.code))}
               >
                 {option.label}
@@ -157,7 +176,7 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
         )}
 
         {step === 2 && (
-          <div className="custom-scrollbar max-h-[50vh] space-y-4 overflow-y-auto text-sm text-muted-foreground">
+          <div className="custom-scrollbar max-h-[50vh] space-y-4 overflow-y-auto text-[13px] text-muted-foreground">
             <section>
               <h3 className="font-semibold text-foreground">{t('onboarding.fastTitle')}</h3>
               <p>{t('onboarding.fastBody')}</p>
@@ -177,21 +196,24 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
           <div className="space-y-4">
             <div className="flex gap-2">
               {(['fr', 'en'] as const).map((code) => (
-                <TextureButton
+                <AppButton
                   key={code}
                   size="sm"
-                  variant={selectedLocale === code ? 'secondary' : 'minimal'}
+                  variant={selectedLocale === code ? 'secondary' : 'ghost'}
                   aria-pressed={selectedLocale === code}
                   onClick={() => void changeLocaleDuringLegal(code)}
                 >
                   {code === 'fr' ? t('locale.french') : t('locale.english')}
-                </TextureButton>
+                </AppButton>
               ))}
             </div>
-            <div onScroll={onScroll} className="custom-scrollbar max-h-[45vh] overflow-y-auto rounded-lg border border-border p-4">
+            <div
+              onScroll={onScroll}
+              className="custom-scrollbar max-h-[45vh] overflow-y-auto rounded-lg border border-white/[0.08] p-4"
+            >
               <LegalDocuments locale={selectedLocale} />
             </div>
-            <label className="flex items-start gap-3 text-sm">
+            <label className="flex items-start gap-3 text-[13px]">
               <Checkbox
                 checked={accepted}
                 disabled={!scrolled}
@@ -199,35 +221,37 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
               />
               <span>{t('onboarding.legalCheckbox')}</span>
             </label>
-            {submitError && <p className="text-sm text-destructive" role="alert">{submitError}</p>}
+            {submitError ? (
+              <p className="text-[13px] text-destructive" role="alert">
+                {submitError}
+              </p>
+            ) : null}
           </div>
         )}
 
         <div className="flex justify-between gap-3 pt-2">
-          <TextureButton
-            variant="minimal"
+          <AppButton
+            variant="ghost"
             disabled={step === 1 || submitting}
             onClick={() => setStep((current) => (current > 1 ? ((current - 1) as Step) : current))}
           >
             {t('common.back')}
-          </TextureButton>
+          </AppButton>
           {step < 3 ? (
-            <CosmicButton
-              as="button"
-              onClick={() => setStep((current) => ((current + 1) as Step))}
+            <AppButton
+              onClick={() => setStep((current) => (current + 1) as Step)}
               disabled={step === 1 && !selectedLocale}
             >
               {t('common.continue')}
-            </CosmicButton>
+            </AppButton>
           ) : (
-            <CosmicButton
-              as="button"
+            <AppButton
               disabled={!scrolled || !accepted || submitting}
+              loading={submitting}
               onClick={() => void finish()}
             >
-              {submitting && <Loader2 className="size-4 animate-spin" />}
               {t('onboarding.finish')}
-            </CosmicButton>
+            </AppButton>
           )}
         </div>
       </DialogContent>

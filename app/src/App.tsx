@@ -16,10 +16,8 @@ import { OnboardingGate } from '@/components/OnboardingGate';
 import { LocaleProvider } from '@/i18n/LocaleContext';
 
 const Login = lazy(() => import('@/pages/Login'));
-const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const ClientWorkspace = lazy(() => import('@/components/ClientWorkspace'));
 const PreviewWindow = lazy(() => import('@/pages/PreviewWindow'));
-const Wallet = lazy(() => import('@/pages/Wallet'));
-const Settings = lazy(() => import('@/pages/Settings'));
 const AdminDashboard = lazy(() => import('@/pages/AdminDashboard'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const PaymentSuccess = lazy(() => import('@/pages/PaymentSuccess'));
@@ -65,14 +63,17 @@ function App() {
                             </ProtectedRoute>
                           }
                         >
-                          <Route index element={<Dashboard />} />
-                          <Route path={ROUTES.PROTECTED.DASHBOARD} element={<Dashboard />} />
-                          <Route path={ROUTES.PROTECTED.WALLET} element={<Wallet />} />
+                          <Route index element={<Navigate to={ROUTES.PROTECTED.DASHBOARD} replace />} />
+                          <Route element={<ClientWorkspace />}>
+                            <Route path={ROUTES.PROTECTED.DASHBOARD} />
+                            <Route path={ROUTES.PROTECTED.HISTORY} />
+                            <Route path={ROUTES.PROTECTED.WALLET} />
+                            <Route path={ROUTES.PROTECTED.SETTINGS} />
+                          </Route>
                           <Route
                             path={ROUTES.PROTECTED.SUBSCRIPTION}
                             element={<Navigate to={`${ROUTES.PROTECTED.WALLET}?buy=1`} replace />}
                           />
-                          <Route path={ROUTES.PROTECTED.SETTINGS} element={<Settings />} />
                           <Route path={ROUTES.PROTECTED.ADMIN_DASHBOARD} element={<AdminDashboard />} />
                         </Route>
                         <Route path="*" element={<NotFound />} />

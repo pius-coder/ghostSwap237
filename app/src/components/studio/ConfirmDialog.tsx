@@ -1,9 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
-import { CosmicButton } from '@/components/ui/cosmic-button';
-import { MetalIconButton } from '@/components/ui/metal-button';
-import { TextureCard } from '@/components/ui/texture-card';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton, AppSurface, IconButton } from '@/components/app';
 
 export function ConfirmDialog({
   open,
@@ -32,55 +29,39 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="app-region-no-drag fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="app-region-no-drag fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4"
       role="presentation"
       onClick={busy ? undefined : onClose}
     >
-      <TextureCard
+      <AppSurface
+        elevated
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-body"
-        className="w-full max-w-md"
+        className="w-full max-w-md p-0"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 px-5 py-4">
-          <h2 id="confirm-dialog-title" className="text-base font-semibold text-foreground">
+          <h2 id="confirm-dialog-title" className="text-[15px] font-semibold text-foreground">
             {title}
           </h2>
-          <MetalIconButton
-            variant="ghost"
-            strength={0.4}
-            disableGlow
-            aria-label={t('common.close')}
-            disabled={busy}
-            onClick={onClose}
-          >
-            <X className="size-4" />
-          </MetalIconButton>
+          <IconButton label={t('common.close')} disabled={busy} onClick={onClose}>
+            <X />
+          </IconButton>
         </div>
-        <p id="confirm-dialog-body" className="px-5 pb-4 text-sm leading-snug text-muted-foreground">
+        <p id="confirm-dialog-body" className="px-5 pb-4 text-[13px] leading-snug text-muted-foreground">
           {body}
         </p>
         <div className="flex justify-end gap-2 px-5 pb-5">
-          <TextureButton
-            variant="minimal"
-            disabled={busy}
-            onClick={onClose}
-          >
+          <AppButton variant="ghost" disabled={busy} onClick={onClose}>
             {resolvedCancel}
-          </TextureButton>
-          <CosmicButton
-            as="button"
-            disabled={busy}
-            onClick={onConfirm}
-            className="min-h-9"
-            contentClassName="min-h-8 px-4 py-1"
-          >
+          </AppButton>
+          <AppButton disabled={busy} loading={busy} onClick={onConfirm}>
             {busy ? t('common.working') : resolvedConfirm}
-          </CosmicButton>
+          </AppButton>
         </div>
-      </TextureCard>
+      </AppSurface>
     </div>
   );
 }

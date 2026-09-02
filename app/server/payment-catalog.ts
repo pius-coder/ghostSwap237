@@ -26,10 +26,17 @@ export async function loadCheckoutCatalog() {
       .select('id, package_id, provider, currency, amount, external_product_id, enabled'),
   ]);
   if (packageError) throw packageError;
-  if (productError) throw productError;
+
+  // During a staged deployment the application can be newer than the database.
+  // Keep the catalogue readable, but never advertise a checkout provider whose
+  // authoritative mapping table is not available yet.
+  const providerMappingsUnavailable = productError?.code === 'PGRST205';
+  if (productError && !providerMappingsUnavailable) throw productError;
 
   return (packages || []).map((pack) => {
-    const mappings = (products || []).filter((row) => row.package_id === pack.id);
+    const mappings = providerMappingsUnavailable
+      ? []
+      : (products || []).filter((row) => row.package_id === pack.id);
     const fapshi = mappings.find((row) => row.provider === 'fapshi' && row.currency === 'XAF');
     const chariow = mappings.find((row) => row.provider === 'chariow' && row.currency === 'USD');
     return {
@@ -39,16 +46,17 @@ export async function loadCheckoutCatalog() {
       priceXaf: Number(fapshi?.amount ?? pack.price_xaf ?? 0),
       priceUsd: Number(chariow?.amount ?? pack.price_usd ?? 0),
       fapshi: {
-        enabled: fapshi?.enabled === true,
+        enabled: !providerMappingsUnavailable && fapshi?.enabled === true,
         amount: Number(fapshi?.amount ?? pack.price_xaf ?? 0),
         currency: 'XAF',
       },
       chariow: {
-        enabled: chariow?.enabled === true && Boolean(chariow?.external_product_id),
-        configured: Boolean(chariow?.external_product_id),
+        enabled: !providerMappingsUnavailable && chariow?.enabled === true && Boolean(chariow?.external_product_id),
+        configured: !providerMappingsUnavailable && Boolean(chariow?.external_product_id),
         amount: Number(chariow?.amount ?? pack.price_usd ?? 0),
         currency: 'USD',
       },
+      databaseReady: !providerMappingsUnavailable,
     };
   });
 }

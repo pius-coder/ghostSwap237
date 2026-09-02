@@ -1,20 +1,22 @@
-// Stage — the model's edited output filling the workspace, with the own
-// camera as a draggable picture-in-picture floating above it (fxswap37
-// pattern, Henshin dark+blue tokens). The PiP is draggable anywhere inside
-// the stage (bounded) and can expand into a split view without remounting
-// the camera.
-import { useEffect, useRef, useState } from 'react';
+// Stage — the model's edited output filling the workspace. The stable source
+// camera preview now lives at the bottom of the Persona inspector.
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X2MainVideoView } from '@reactor-models/x2';
-import { Pipette, SplitSquareHorizontal, X } from 'lucide-react';
-import { MetalIconButton } from '@/components/ui/metal-button';
+import { Camera } from 'lucide-react';
+import { AppButton } from '@/components/app';
 import { useSessionCommands } from '@/lib/session/sessionContext';
 import type { LiveProvider } from '@/lib/liveProvider';
 
-// Padding used to clamp the dragged PiP inside the stage.
-const PIP_PADDING = 8;
-
-function Placeholder({ provider }: { provider: LiveProvider }) {
+function Placeholder({
+  provider,
+  cameraOn,
+  onChooseCamera,
+}: {
+  provider: LiveProvider;
+  cameraOn: boolean;
+  onChooseCamera: () => void;
+}) {
   const { t } = useTranslation();
   const { status } = useSessionCommands();
   const copy =
@@ -30,12 +32,18 @@ function Placeholder({ provider }: { provider: LiveProvider }) {
             ? { title: t('studio.starting'), subtitle: t('studio.modelBoots') }
             : { title: t('studio.live'), subtitle: t('studio.generationStarting') };
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 px-6 text-center transition-opacity duration-500">
-      <div className="flex size-[38px] items-center justify-center overflow-hidden rounded-xl">
-        <img src="./logo.png" alt="" className="h-full w-full object-cover opacity-40" />
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 px-6 text-center transition-opacity duration-200">
+      <div className="mb-4 grid size-11 place-items-center rounded-lg border border-white/[0.08] bg-white/[0.035] text-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+        <Camera className="size-5" strokeWidth={1.5} />
       </div>
-      <p className="text-[40px] font-medium leading-none tracking-tight text-white/50">{copy.title}</p>
-      <p className="text-sm leading-snug text-white/40">{copy.subtitle}</p>
+      <p className="text-xl font-medium tracking-[-0.02em] text-white/80">{copy.title}</p>
+      <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-white/45">{copy.subtitle}</p>
+      {!cameraOn ? (
+        <AppButton variant="secondary" size="sm" className="mt-5" onClick={onChooseCamera}>
+          <Camera className="size-3.5" />
+          {t('studio.chooseCamera')}
+        </AppButton>
+      ) : null}
     </div>
   );
 }
@@ -50,7 +58,7 @@ export function Stage({
   webcamVideoRef,
   outputHostRef,
   onTrack,
-  onStopCamera,
+  onChooseCamera,
 }: {
   generating: boolean;
   activeLabel?: string | null;
@@ -65,16 +73,9 @@ export function Stage({
   /** Host of the visible edited output — vcam capture resolves its <video>. */
   outputHostRef: React.RefObject<HTMLDivElement | null>;
   onTrack?: (track: MediaStreamTrack | null) => void;
-  onStopCamera: () => void;
+  onChooseCamera: () => void;
 }) {
   const { t } = useTranslation();
-  // true: original | edited side by side. false: floating draggable PiP.
-  const [split, setSplit] = useState(false);
-  // PiP offset in px inside the stage; null = default bottom-right corner.
-  const [pip, setPip] = useState<{ x: number; y: number } | null>(null);
-  const stageRef = useRef<HTMLElement>(null);
-  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
-
   const proLive = liveProvider === 'pro' && Boolean(remoteStream);
 
   // Bind the raw camera stream to the PiP video and report its track up.
@@ -124,41 +125,9 @@ export function Stage({
     };
   }, [remoteStream, remotePlayNonce, liveProvider, outputHostRef]);
 
-  function startDrag(e: React.PointerEvent<HTMLDivElement>) {
-    if (split || e.button !== 0) return;
-    const box = e.currentTarget.getBoundingClientRect();
-    dragRef.current = { dx: e.clientX - box.left, dy: e.clientY - box.top };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }
-
-  function moveDrag(e: React.PointerEvent<HTMLDivElement>) {
-    const d = dragRef.current;
-    if (!d) return;
-    const stage = stageRef.current?.getBoundingClientRect();
-    if (!stage) return;
-    const box = e.currentTarget.getBoundingClientRect();
-    const x = Math.min(
-      Math.max(e.clientX - stage.left - d.dx, PIP_PADDING),
-      stage.width - box.width - PIP_PADDING,
-    );
-    const y = Math.min(
-      Math.max(e.clientY - stage.top - d.dy, PIP_PADDING),
-      stage.height - box.height - PIP_PADDING,
-    );
-    setPip({ x, y });
-  }
-
-  function endDrag() {
-    dragRef.current = null;
-  }
-
   return (
-    <section
-      ref={stageRef}
-      className="relative min-h-0 w-full flex-1 overflow-hidden rounded-xl bg-black/55"
-    >
-      {/* Edited output — full stage in PiP mode, right half in split mode. */}
-      <div ref={outputHostRef} className={`absolute ${split ? 'inset-y-0 right-0 w-1/2' : 'inset-0'}`}>
+    <section className="studio-stage relative min-h-0 w-full flex-1 overflow-hidden rounded-xl">
+      <div ref={outputHostRef} className="absolute inset-0">
         {liveProvider === 'pro' ? (
           <video
             id="output"
@@ -170,74 +139,14 @@ export function Stage({
         ) : (
           <X2MainVideoView videoObjectFit="contain" className="absolute inset-0 h-full w-full" />
         )}
-        {!generating && !proLive && <Placeholder provider={liveProvider} />}
+        {!generating && !proLive && (
+          <Placeholder provider={liveProvider} cameraOn={cameraOn} onChooseCamera={onChooseCamera} />
+        )}
         <span className="pointer-events-none absolute left-2 top-2 max-w-[40%] truncate rounded bg-black/70 px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-tight text-white/60">
           {generating ? (activeLabel ?? t('studio.edited')) : t('studio.edited')}
         </span>
       </div>
 
-      {/* Own camera — ONE stable wrapper, never remounted across layouts. */}
-      {cameraOn && (
-        <div
-          onPointerDown={startDrag}
-          onPointerMove={moveDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          className={`absolute touch-none select-none overflow-hidden bg-black ${
-            split
-              ? 'inset-y-0 left-0 z-10 w-1/2'
-              : 'z-20 aspect-video w-[26%] min-w-[180px] cursor-grab rounded-lg border border-white/40 shadow-[0_8px_24px_rgba(0,0,0,0.35)] active:cursor-grabbing'
-          }`}
-          style={
-            split
-              ? undefined
-              : pip
-                ? { left: pip.x, top: pip.y }
-                : { right: 12, bottom: 12 }
-          }
-        >
-          <video
-            ref={webcamVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="h-full w-full -scale-x-100 object-cover"
-          />
-
-          {/* Top strip (drag handle + view controls). */}
-          <div className="absolute inset-x-0 top-0 z-10 flex h-8 items-center justify-between gap-1 bg-gradient-to-b from-black/60 to-transparent px-2">
-            <span className="font-mono text-[10px] uppercase tracking-tight text-white/80">
-              {split ? t('studio.original') : t('studio.camera')}
-            </span>
-            <div className="flex items-center gap-1">
-              <MetalIconButton
-                variant="ghost"
-                strength={0.35}
-                disableGlow
-                aria-label={split ? t('studio.backToPip') : t('studio.openSplit')}
-                title={split ? t('studio.backToPip') : t('studio.openSplit')}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => setSplit((s) => !s)}
-                className="size-7 text-white/80 hover:text-white"
-              >
-                {split ? <Pipette className="size-3.5" /> : <SplitSquareHorizontal className="size-3.5" />}
-              </MetalIconButton>
-              <MetalIconButton
-                variant="destructive"
-                strength={0.35}
-                disableGlow
-                aria-label={t('studio.stopCamera')}
-                title={t('studio.stopCamera')}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={onStopCamera}
-                className="size-7 text-white/80 hover:text-white"
-              >
-                <X className="size-3.5" />
-              </MetalIconButton>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

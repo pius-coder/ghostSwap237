@@ -5,10 +5,11 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Geist Variable', 'Segoe UI', 'sans-serif'],
+        sans: ['Manrope Variable', 'Manrope', 'Segoe UI', 'sans-serif'],
+        mono: ['Manrope Variable', 'Manrope', 'Segoe UI', 'sans-serif'],
       },
       colors: {
-        /* Ramps gris/bleu du langage ORYA, adaptés dark-first (aucun jaune) */
+        /* Rampe graphite Henshin. Les couleurs vives restent sémantiques. */
         gray: {
           40: "#f8f9fb",
           50: "#f4f6f8",
@@ -24,14 +25,7 @@ module.exports = {
           1000: "#1a1d23",
           950: "#14161b",
         },
-        blue: {
-          300: "#7ba3ff",
-          400: "#4f88ff",
-          500: "#1f55f1",
-          600: "#1848d4",
-          700: "#163eb5",
-        },
-        border: "hsl(var(--border))",
+        border: "hsl(var(--border) / var(--border-opacity, 0.08))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
@@ -49,6 +43,14 @@ module.exports = {
           DEFAULT: "hsl(var(--destructive) / <alpha-value>)",
           foreground: "hsl(var(--destructive-foreground) / <alpha-value>)",
         },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
@@ -65,6 +67,10 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        surface: {
+          DEFAULT: "hsl(var(--surface))",
+          elevated: "hsl(var(--surface-elevated))",
+        },
         panel: {
           DEFAULT: "hsl(var(--panel))",
         },
@@ -75,20 +81,21 @@ module.exports = {
           "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
           accent: "hsl(var(--sidebar-accent))",
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
-          border: "hsl(var(--sidebar-border))",
+          border: "hsl(var(--sidebar-border) / var(--border-opacity, 0.08))",
           ring: "hsl(var(--sidebar-ring))",
         },
       },
       borderRadius: {
-        xl: "calc(var(--radius) + 4px)",
+        xl: "var(--radius-modal)",
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-        xs: "calc(var(--radius) - 6px)",
+        md: "calc(var(--radius) - 1px)",
+        sm: "calc(var(--radius) - 3px)",
+        xs: "calc(var(--radius) - 5px)",
       },
       boxShadow: {
         xs: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
         surface: "var(--shadow-surface)",
+        float: "var(--shadow-float)",
       },
       keyframes: {
         "accordion-down": {

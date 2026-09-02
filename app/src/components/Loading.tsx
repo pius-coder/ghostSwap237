@@ -15,7 +15,7 @@ export function Loading({ size = 'md', fullScreen = false, text }: LoadingProps)
 
   const spinner = (
     <div className="flex flex-col items-center justify-center gap-3">
-      <div className={`${sizeClasses[size]} rounded-full border-blue-500 border-t-transparent animate-spin`} />
+      <div className={`${sizeClasses[size]} animate-spin rounded-full border-foreground border-t-transparent`} />
       {text && <p className="text-sm text-muted-foreground">{text}</p>}
     </div>
   );

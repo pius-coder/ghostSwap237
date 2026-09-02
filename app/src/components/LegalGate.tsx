@@ -3,9 +3,15 @@ import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton } from '@/components/app';
 import { LegalDocuments } from '@/components/LegalDocuments';
 import { useLocalePreference } from '@/i18n/useLocalePreference';
 import type { AppLocale } from '@/i18n/locale';
@@ -18,7 +24,9 @@ export function LegalGate({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { locale } = useLocalePreference();
-  const [requiredForUser, setRequiredForUser] = useState<{ userId: string; required: boolean } | null>(null);
+  const [requiredForUser, setRequiredForUser] = useState<{ userId: string; required: boolean } | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [ack, setAck] = useState<{ locale: AppLocale; scrolled: boolean; accepted: boolean }>(() => ({
     locale,
@@ -74,10 +82,13 @@ export function LegalGate({ children }: { children: ReactNode }) {
             <DialogTitle>{t('legal.gateTitle')}</DialogTitle>
             <DialogDescription>{t('legal.gateDescription')}</DialogDescription>
           </DialogHeader>
-          <div onScroll={onScroll} className="custom-scrollbar max-h-[55vh] overflow-y-auto rounded-lg border border-border p-4">
+          <div
+            onScroll={onScroll}
+            className="custom-scrollbar max-h-[55vh] overflow-y-auto rounded-lg border border-white/[0.08] p-4"
+          >
             <LegalDocuments locale={locale} />
           </div>
-          <label className="flex items-start gap-3 text-sm">
+          <label className="flex items-start gap-3 text-[13px]">
             <Checkbox
               checked={ack.accepted}
               disabled={!ack.scrolled}
@@ -85,10 +96,14 @@ export function LegalGate({ children }: { children: ReactNode }) {
             />
             <span>{t('legal.checkbox')}</span>
           </label>
-          <TextureButton disabled={!ack.scrolled || !ack.accepted || loading} onClick={() => void confirm()}>
-            {loading && <Loader2 className="size-4 animate-spin" />}
+          <AppButton
+            disabled={!ack.scrolled || !ack.accepted || loading}
+            loading={loading}
+            onClick={() => void confirm()}
+          >
+            {loading ? <Loader2 className="size-4 animate-spin" /> : null}
             {t('legal.continue')}
-          </TextureButton>
+          </AppButton>
         </DialogContent>
       </Dialog>
     </>

@@ -6,6 +6,7 @@ import {
   generateLicenseCode,
   hashLicenseCode,
 } from './pro-utils.js';
+import { dispatchNotificationOutbox } from './notification-dispatch.js';
 
 const PERIODS = new Set(['today', '7d', '30d', 'all']);
 
@@ -57,33 +58,87 @@ async function loadClients() {
 }
 
 async function loadPayments() {
-  const [{ data: crypto, error: cryptoError }, { data: transactions, error: transactionError }] = await Promise.all([
-    supabaseAdmin.from('crypto_payments').select('*').order('created_at', { ascending: false }).limit(500),
-    supabaseAdmin.from('transactions').select('id, user_id, amount, credits, status, reference, description, metadata, created_at').eq('type', 'credit').order('created_at', { ascending: false }).limit(500),
-  ]);
-  if (cryptoError) throw cryptoError;
-  if (transactionError) throw transactionError;
-  const website = (transactions || []).filter((row) => row.status === 'pending' || row.description === 'Website credit purchase');
-  const rows = [
-    ...(crypto || []).map((row) => ({ ...row, source: 'crypto', currency: row.currency || 'USD' })),
-    ...website.map((row) => ({
-      ...row,
-      source: 'website',
-      currency: row.metadata?.currency || 'XAF',
-      status: row.status === 'success' ? 'completed' : row.status,
-    })),
-  ].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const { data, error } = await supabaseAdmin.from('payment_orders').select('*')
+    .order('created_at', { ascending: false }).limit(500);
+  if (error) throw error;
+  const rows = data || [];
   const userMap = await usersById(rows.map((row) => row.user_id));
-  const revenueByCurrency = {};
+  const cashByCurrency = {};
   for (const row of rows) {
-    if (!['completed', 'success'].includes(row.status)) continue;
+    if (!['paid', 'refunded', 'disputed'].includes(row.status)) continue;
     const currency = String(row.currency || 'UNKNOWN').toUpperCase();
-    revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + Number(row.amount || 0);
+    const bucket = cashByCurrency[currency] || { gross: 0, fees: 0, net: 0, refunded: 0 };
+    if (row.status === 'paid') {
+      bucket.gross += Number(row.gross_amount || 0);
+      bucket.fees += Number(row.fee_amount || 0);
+      bucket.net += Number(row.net_amount ?? row.gross_amount ?? 0);
+    } else bucket.refunded += Number(row.gross_amount || 0);
+    cashByCurrency[currency] = bucket;
   }
   return {
     rows: rows.map((row) => ({ ...row, user: userMap.get(row.user_id) || null })),
-    revenueByCurrency,
+    cashByCurrency,
     pending: rows.filter((row) => row.status === 'pending').length,
+    paidNotFulfilled: rows.filter((row) => row.status === 'paid' && row.fulfilment_status !== 'fulfilled').length,
+  };
+}
+
+async function loadFinanceLedger() {
+  const { data, error } = await supabaseAdmin.from('wallet_ledger').select('*')
+    .order('created_at', { ascending: false }).limit(1000);
+  if (error) throw error;
+  const rows = data || [];
+  const userMap = await usersById(rows.map((row) => row.user_id));
+  const totals = rows.reduce((result, row) => {
+    result[row.entry_type] = (result[row.entry_type] || 0) + Number(row.credits_delta || 0);
+    return result;
+  }, {});
+  return { rows: rows.map((row) => ({ ...row, user: userMap.get(row.user_id) || null })), totals };
+}
+
+async function loadNotifications() {
+  const [{ data: rows, error }, { data: recipients, error: recipientError }] = await Promise.all([
+    supabaseAdmin.from('notification_outbox').select('*').order('created_at', { ascending: false }).limit(500),
+    supabaseAdmin.from('admin_notification_recipients').select('*').order('created_at', { ascending: false }),
+  ]);
+  if (error) throw error;
+  if (recipientError) throw recipientError;
+  return { rows: rows || [], recipients: recipients || [], failed: (rows || []).filter((row) => ['failed', 'dead_letter'].includes(row.status)).length };
+}
+
+async function loadSupport(threadId = '') {
+  const { data: threads, error } = await supabaseAdmin
+    .from('support_threads')
+    .select('*')
+    .order('last_message_at', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  const rows = threads || [];
+  const userMap = await usersById(rows.map((thread) => thread.user_id));
+  const selected = threadId ? rows.find((thread) => thread.id === threadId) : rows[0];
+  let messages = [];
+  if (selected) {
+    const { data, error: messageError } = await supabaseAdmin
+      .from('support_messages')
+      .select('id, thread_id, sender_id, sender_role, body, channel, whatsapp_delivery_status, whatsapp_message_id, created_at')
+      .eq('thread_id', selected.id)
+      .order('created_at', { ascending: true })
+      .limit(1000);
+    if (messageError) throw messageError;
+    messages = data || [];
+    await supabaseAdmin.from('support_threads')
+      .update({ admin_read_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', selected.id);
+  }
+  return {
+    threads: rows.map((thread) => ({
+      ...thread,
+      user: userMap.get(thread.user_id) || null,
+      unread: Boolean(thread.last_client_message_at
+        && (!thread.admin_read_at || new Date(thread.last_client_message_at) > new Date(thread.admin_read_at))),
+    })),
+    thread: selected ? { ...selected, user: userMap.get(selected.user_id) || null } : null,
+    messages,
   };
 }
 
@@ -91,7 +146,7 @@ async function loadUsage(period) {
   const start = periodStart(period);
   let query = supabaseAdmin
     .from('sessions')
-    .select('id, user_id, provider, model, start_time, end_time, seconds_used, credits_used, credits_per_second, status, end_reason')
+    .select('id, user_id, provider, model, start_time, end_time, seconds_used, credits_used, credits_per_second, provider_cost_usd, provider_cost_rate_usd_per_second, status, end_reason')
     .order('start_time', { ascending: false })
     .limit(2000);
   if (start) query = query.gte('start_time', start);
@@ -106,7 +161,10 @@ async function loadUsage(period) {
     current.sessions += 1;
     current.seconds += seconds;
     current.credits += Number(row.credits_used || 0);
-    if (provider === 'fal') current.providerCostUsd += seconds * 0.04;
+    const storedCost = Number(row.provider_cost_usd);
+    current.providerCostUsd += Number.isFinite(storedCost)
+      ? storedCost
+      : seconds * (provider === 'fal' ? 0.04 : provider === 'reactor' ? 0.0017 : 0);
     result[provider] = current;
     return result;
   }, {});
@@ -116,7 +174,9 @@ async function loadUsage(period) {
     rows: rows.map((row) => ({
       ...row,
       user: userMap.get(row.user_id) || null,
-      providerCostUsd: row.provider === 'fal' ? Number(row.seconds_used || 0) * 0.04 : null,
+      providerCostUsd: Number.isFinite(Number(row.provider_cost_usd))
+        ? Number(row.provider_cost_usd)
+        : Number(row.seconds_used || 0) * (row.provider === 'fal' ? 0.04 : row.provider === 'reactor' ? 0.0017 : 0),
     })),
   };
 }
@@ -134,7 +194,7 @@ async function loadLicenses() {
 async function loadPackages() {
   const { data, error } = await supabaseAdmin
     .from('credit_packages')
-    .select('id, name, credits, price_usd, price_xaf, is_active, sort_order')
+    .select('id, name, credits, price_usd, price_xaf, is_active, sort_order, chariow_product_id, chariow_enabled')
     .order('sort_order', { ascending: true })
     .order('credits', { ascending: true });
   if (error) throw error;
@@ -147,6 +207,9 @@ async function handleGet(req, res) {
   if (action === 'licenses') return res.json({ licenses: await loadLicenses() });
   if (action === 'packages') return res.json({ packages: await loadPackages() });
   if (action === 'payments') return res.json(await loadPayments());
+  if (action === 'ledger') return res.json(await loadFinanceLedger());
+  if (action === 'notifications') return res.json(await loadNotifications());
+  if (action === 'support') return res.json(await loadSupport(String(req.query?.threadId || '').trim()));
   if (action === 'usage') {
     const requested = String(req.query?.period || '30d');
     const period = PERIODS.has(requested) ? requested : '30d';
@@ -162,8 +225,8 @@ async function handleGet(req, res) {
     return res.json({ audit: data || [] });
   }
   if (action === 'overview') {
-    const [clients, licenses, payments, usage] = await Promise.all([
-      loadClients(), loadLicenses(), loadPayments(), loadUsage('30d'),
+    const [clients, licenses, payments, usage, ledger, notifications] = await Promise.all([
+      loadClients(), loadLicenses(), loadPayments(), loadUsage('30d'), loadFinanceLedger(), loadNotifications(),
     ]);
     return res.json({
       totalUsers: clients.length,
@@ -171,7 +234,10 @@ async function handleGet(req, res) {
       activeProLicenses: licenses.filter((license) => license.status === 'active').length,
       pendingProLicenses: licenses.filter((license) => license.status === 'pending').length,
       pendingPayments: payments.pending,
-      revenueByCurrency: payments.revenueByCurrency,
+      paidNotFulfilled: payments.paidNotFulfilled,
+      cashByCurrency: payments.cashByCurrency,
+      creditMovements: ledger.totals,
+      failedNotifications: notifications.failed,
       usageByProvider: usage.totals,
     });
   }
@@ -180,7 +246,39 @@ async function handleGet(req, res) {
 
 async function handlePost(req, res, adminUserId) {
   const action = String(req.body?.action || '').trim();
+
+  if (action === 'support-reply') {
+    const body = String(req.body?.message || '').trim();
+    if (body.length < 1 || body.length > 4000) {
+      return res.status(400).json({ error: 'Reply must contain between 1 and 4000 characters' });
+    }
+    const { data, error } = await supabaseAdmin.rpc('admin_reply_support_thread', {
+      p_admin_id: adminUserId,
+      p_thread_id: String(req.body?.threadId || '').trim(),
+      p_body: body,
+      p_notify_whatsapp: req.body?.notifyWhatsApp !== false,
+    });
+    if (error) throw error;
+    const delivery = await dispatchNotificationOutbox(10).catch((deliveryError) => ({
+      processed: 0, sent: 0, failed: 1, configured: false,
+      error: String(deliveryError?.message || deliveryError),
+    }));
+    return res.json({ ...data, delivery });
+  }
+
   const reason = requireReason(req.body?.reason);
+
+  if (action === 'support-update') {
+    const { data, error } = await supabaseAdmin.rpc('admin_update_support_thread', {
+      p_admin_id: adminUserId,
+      p_thread_id: String(req.body?.threadId || '').trim(),
+      p_status: String(req.body?.status || '').trim(),
+      p_priority: String(req.body?.priority || '').trim(),
+      p_reason: reason,
+    });
+    if (error) throw error;
+    return res.json({ thread: data });
+  }
 
   if (action === 'create-license') {
     const userId = String(req.body?.userId || '').trim();
@@ -248,6 +346,8 @@ async function handlePost(req, res, adminUserId) {
       price_usd: Number(req.body?.priceUsd || 0),
       price_xaf: Number(req.body?.priceXaf || 0),
       is_active: req.body?.isActive !== false,
+      chariow_product_id: String(req.body?.chariowProductId || '').trim() || null,
+      chariow_enabled: req.body?.chariowEnabled === true,
     };
     if (!values.name || !Number.isInteger(values.credits) || values.credits <= 0
       || !Number.isFinite(values.price_usd) || values.price_usd < 0
@@ -257,7 +357,7 @@ async function handlePost(req, res, adminUserId) {
     const query = id
       ? supabaseAdmin.from('credit_packages').update(values).eq('id', id)
       : supabaseAdmin.from('credit_packages').insert(values);
-    const { data, error } = await query.select('id, name, credits, price_usd, price_xaf, is_active, sort_order').single();
+    const { data, error } = await query.select('id, name, credits, price_usd, price_xaf, is_active, sort_order, chariow_product_id, chariow_enabled').single();
     if (error) throw error;
     const { error: auditError } = await supabaseAdmin.from('admin_audit_log').insert({
       actor_user_id: adminUserId,
@@ -269,6 +369,26 @@ async function handlePost(req, res, adminUserId) {
     });
     if (auditError) throw auditError;
     return res.json({ package: data });
+  }
+
+  if (action === 'upsert-notification-recipient') {
+    const channel = String(req.body?.channel || '').trim().toLowerCase();
+    const destination = String(req.body?.destination || '').trim();
+    if (!['email', 'whatsapp', 'sms'].includes(channel) || destination.length < 3 || destination.length > 320) {
+      return res.status(400).json({ error: 'Invalid notification recipient' });
+    }
+    const { data, error } = await supabaseAdmin.from('admin_notification_recipients').upsert({
+      channel, destination, enabled: req.body?.enabled !== false,
+      minimum_severity: String(req.body?.minimumSeverity || 'info'), created_by: adminUserId,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'channel,destination' }).select('*').single();
+    if (error) throw error;
+    const { error: auditError } = await supabaseAdmin.from('admin_audit_log').insert({
+      actor_user_id: adminUserId, action: 'notification_recipient.upsert', entity_type: 'notification_recipient',
+      entity_id: data.id, reason, after_state: { ...data, destination: '[REDACTED]' },
+    });
+    if (auditError) throw auditError;
+    return res.json({ recipient: data });
   }
 
   return res.status(400).json({ error: 'Unknown admin mutation' });

@@ -1,8 +1,9 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CosmicButton } from '@/components/ui/cosmic-button';
+import { AppButton, AppSurface, PublicScene } from '@/components/app';
 import { useLocalePreference } from '@/i18n/useLocalePreference';
 import { detectSystemLocalePreselection, type AppLocale } from '@/i18n/locale';
+import { cn } from '@/lib/utils';
 
 export function LocaleBootstrapGate({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
@@ -13,20 +14,22 @@ export function LocaleBootstrapGate({ children }: { children: React.ReactNode })
   if (hasConfirmedLocale) return <>{children}</>;
 
   return (
-    <div className="mesh-bg flex min-h-screen items-center justify-center p-6" role="dialog" aria-labelledby={titleId}>
-      <div className="w-full max-w-lg space-y-6 rounded-2xl border border-border bg-background/95 p-8 shadow-xl">
-        <div className="space-y-2 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Henshin</p>
-          <h1 id={titleId} tabIndex={-1} className="text-3xl font-semibold tracking-tight text-foreground">
+    <PublicScene>
+      <AppSurface elevated className="w-full space-y-6 p-6 sm:p-8" role="dialog" aria-labelledby={titleId}>
+        <div className="space-y-2 text-left">
+          <p className="text-xs font-medium text-muted-foreground">Henshin</p>
+          <h1 id={titleId} tabIndex={-1} className="text-2xl font-semibold tracking-tight text-foreground">
             {t('locale.title')}
           </h1>
-          <p className="text-sm text-muted-foreground">{t('locale.subtitle')}</p>
+          <p className="text-[13px] text-muted-foreground">{t('locale.subtitle')}</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label={t('locale.title')}>
-          {([
-            { code: 'fr' as const, label: t('locale.french') },
-            { code: 'en' as const, label: t('locale.english') },
-          ]).map((option) => {
+          {(
+            [
+              { code: 'fr' as const, label: t('locale.french') },
+              { code: 'en' as const, label: t('locale.english') },
+            ] as const
+          ).map((option) => {
             const selectedState = selected === option.code;
             const systemSuggested = detectSystemLocalePreselection() === option.code;
             return (
@@ -37,27 +40,25 @@ export function LocaleBootstrapGate({ children }: { children: React.ReactNode })
                 aria-checked={selectedState}
                 aria-current={selectedState ? 'true' : undefined}
                 onClick={() => setSelected(option.code)}
-                className={`rounded-xl border p-5 text-left transition ${
-                  selectedState ? 'border-primary bg-primary/10 ring-1 ring-primary/40' : 'border-border bg-panel/50 hover:border-primary/40'
-                }`}
-              >
-                <p className="text-lg font-semibold text-foreground">{option.label}</p>
-                {systemSuggested && (
-                  <p className="mt-2 text-xs text-muted-foreground">{t('locale.systemHint')}</p>
+                className={cn(
+                  'rounded-lg border p-4 text-left transition-ui',
+                  selectedState
+                    ? 'border-white/60 bg-white/[0.08]'
+                    : 'border-white/[0.08] bg-surface hover:border-white/20',
                 )}
+              >
+                <p className="text-[15px] font-semibold text-foreground">{option.label}</p>
+                {systemSuggested ? (
+                  <p className="mt-2 text-xs text-muted-foreground">{t('locale.systemHint')}</p>
+                ) : null}
               </button>
             );
           })}
         </div>
-        <CosmicButton
-          as="button"
-          className="w-full"
-          contentClassName="min-h-12"
-          onClick={() => void confirmLocale(selected)}
-        >
+        <AppButton className="w-full" onClick={() => void confirmLocale(selected)}>
           {t('locale.continue')}
-        </CosmicButton>
-      </div>
-    </div>
+        </AppButton>
+      </AppSurface>
+    </PublicScene>
   );
 }

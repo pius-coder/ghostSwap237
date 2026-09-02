@@ -2,16 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Activity,
-  Check,
+  Bell,
   Clipboard,
   CreditCard,
-  KeyRound,
   Plus,
   RefreshCw,
   Search,
+  Send,
   ShieldCheck,
+  MessagesSquare,
   Users,
-  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TextureButton as Button } from '@/components/ui/texture-button';
+import { AppButton as Button } from '@/components/app';
 
 type ProLicense = {
   id: string;
@@ -49,15 +49,51 @@ type Client = {
 type Payment = {
   id: string;
   user_id: string;
-  source: 'crypto' | 'website';
-  amount: number;
+  provider: 'fapshi' | 'chariow' | 'website' | 'legacy';
+  gross_amount: number;
+  fee_amount?: number | null;
+  net_amount?: number | null;
   currency?: string;
-  credits?: number;
+  credits_purchased: number;
   status: string;
+  fulfilment_status: string;
   provider_status?: string;
-  reference?: string;
+  provider_reference?: string;
   created_at: string;
   user?: { email?: string; name?: string } | null;
+};
+
+type LedgerRow = {
+  id: string; entry_type: string; credits_delta: number; balance_before: number; balance_after: number;
+  reason?: string; created_at: string; user?: { email?: string } | null;
+};
+
+type NotificationRow = {
+  id: string; event_type: string; severity: string; channel: string; destination: string;
+  status: string; attempts: number; last_error?: string | null; created_at: string;
+};
+type NotificationRecipient = { id: string; channel: string; destination: string; enabled: boolean; minimum_severity: string };
+
+type SupportThread = {
+  id: string;
+  user_id: string;
+  subject: string;
+  status: 'open' | 'pending' | 'resolved' | 'closed';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  whatsapp_number?: string | null;
+  last_message_at: string;
+  last_client_message_at?: string | null;
+  unread?: boolean;
+  user?: { email?: string; name?: string } | null;
+};
+
+type SupportMessage = {
+  id: string;
+  thread_id: string;
+  sender_role: 'client' | 'admin' | 'system';
+  body: string;
+  whatsapp_delivery_status: string;
+  created_at: string;
 };
 
 type UsageRow = {
@@ -88,6 +124,8 @@ type CreditPackage = {
   price_usd: number;
   price_xaf: number;
   is_active: boolean;
+  chariow_product_id?: string | null;
+  chariow_enabled?: boolean;
 };
 
 type Overview = {
@@ -96,7 +134,10 @@ type Overview = {
   activeProLicenses: number;
   pendingProLicenses: number;
   pendingPayments: number;
-  revenueByCurrency: Record<string, number>;
+  paidNotFulfilled: number;
+  failedNotifications: number;
+  cashByCurrency: Record<string, { gross: number; fees: number; net: number; refunded: number }>;
+  creditMovements: Record<string, number>;
   usageByProvider: Record<string, { sessions: number; seconds: number; credits: number; providerCostUsd: number }>;
 };
 
@@ -104,7 +145,6 @@ type Mutation =
   | { kind: 'credits'; client: Client }
   | { kind: 'create-license'; client: Client }
   | { kind: 'license'; license: ProLicense; action: 'set_rate' | 'revoke' | 'reactivate' }
-  | { kind: 'payment'; payment: Payment; status: 'completed' | 'failed' }
   | { kind: 'package'; package?: CreditPackage };
 
 const EMPTY_OVERVIEW: Overview = {
@@ -113,7 +153,10 @@ const EMPTY_OVERVIEW: Overview = {
   activeProLicenses: 0,
   pendingProLicenses: 0,
   pendingPayments: 0,
-  revenueByCurrency: {},
+  paidNotFulfilled: 0,
+  failedNotifications: 0,
+  cashByCurrency: {},
+  creditMovements: {},
   usageByProvider: {},
 };
 
@@ -146,6 +189,20 @@ export default function AdminDashboard() {
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [packages, setPackages] = useState<CreditPackage[]>([]);
+  const [ledger, setLedger] = useState<LedgerRow[]>([]);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [notificationRecipients, setNotificationRecipients] = useState<NotificationRecipient[]>([]);
+  const [supportThreads, setSupportThreads] = useState<SupportThread[]>([]);
+  const [supportThread, setSupportThread] = useState<SupportThread | null>(null);
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
+  const [supportReply, setSupportReply] = useState('');
+  const [supportReason, setSupportReason] = useState('Mise à jour de la conversation support');
+  const [supportNotifyWhatsApp, setSupportNotifyWhatsApp] = useState(true);
+  const [supportFilter, setSupportFilter] = useState('active');
+  const [supportBusy, setSupportBusy] = useState(false);
+  const [recipientChannel, setRecipientChannel] = useState('email');
+  const [recipientDestination, setRecipientDestination] = useState('');
+  const [recipientReason, setRecipientReason] = useState('');
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30d');
   const [query, setQuery] = useState('');
@@ -158,13 +215,15 @@ export default function AdminDashboard() {
   const [packageCredits, setPackageCredits] = useState('');
   const [packageUsd, setPackageUsd] = useState('');
   const [packageXaf, setPackageXaf] = useState('');
+  const [packageChariowProduct, setPackageChariowProduct] = useState('');
+  const [packageChariowEnabled, setPackageChariowEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [revealedCode, setRevealedCode] = useState<string | null>(null);
 
   const loadData = useCallback(async (usagePeriod = period) => {
     setLoading(true);
     try {
-      const [overviewData, clientData, licenseData, paymentData, usageData, auditData, packageData] = await Promise.all([
+      const [overviewData, clientData, licenseData, paymentData, usageData, auditData, packageData, ledgerData, notificationData, supportData] = await Promise.all([
         adminRequest<Overview>('/admin?action=overview'),
         adminRequest<{ clients: Client[] }>('/admin?action=clients'),
         adminRequest<{ licenses: ProLicense[] }>('/admin?action=licenses'),
@@ -172,6 +231,10 @@ export default function AdminDashboard() {
         adminRequest<{ rows: UsageRow[] }>(`/admin?action=usage&period=${usagePeriod}`),
         adminRequest<{ audit: AuditRow[] }>('/admin?action=audit'),
         adminRequest<{ packages: CreditPackage[] }>('/admin?action=packages'),
+        adminRequest<{ rows: LedgerRow[] }>('/admin?action=ledger'),
+        adminRequest<{ rows: NotificationRow[]; recipients: NotificationRecipient[] }>('/admin?action=notifications'),
+        adminRequest<{ threads: SupportThread[]; thread: SupportThread | null; messages: SupportMessage[] }>('/admin?action=support')
+          .catch(() => ({ threads: [], thread: null, messages: [] })),
       ]);
       setOverview(overviewData);
       setClients(clientData.clients);
@@ -180,6 +243,12 @@ export default function AdminDashboard() {
       setUsage(usageData.rows);
       setAudit(auditData.audit);
       setPackages(packageData.packages);
+      setLedger(ledgerData.rows);
+      setNotifications(notificationData.rows);
+      setNotificationRecipients(notificationData.recipients);
+      setSupportThreads(supportData.threads);
+      setSupportThread(supportData.thread);
+      setSupportMessages(supportData.messages);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not load administration data.');
     } finally {
@@ -205,6 +274,8 @@ export default function AdminDashboard() {
       setPackageCredits(String(next.package?.credits || ''));
       setPackageUsd(String(next.package?.price_usd || 0));
       setPackageXaf(String(next.package?.price_xaf || 0));
+      setPackageChariowProduct(next.package?.chariow_product_id || '');
+      setPackageChariowEnabled(next.package?.chariow_enabled === true);
     }
   };
 
@@ -226,14 +297,6 @@ export default function AdminDashboard() {
           creditsPerSecond: mutation.action === 'set_rate' ? Number(rate) : undefined,
           reason,
         };
-      } else if (mutation.kind === 'payment') {
-        payload = {
-          action: 'decide-payment',
-          paymentId: mutation.payment.id,
-          source: mutation.payment.source,
-          status: mutation.status,
-          reason,
-        };
       } else {
         payload = {
           action: 'upsert-package',
@@ -242,6 +305,8 @@ export default function AdminDashboard() {
           credits: Number(packageCredits),
           priceUsd: Number(packageUsd),
           priceXaf: Number(packageXaf),
+          chariowProductId: packageChariowProduct,
+          chariowEnabled: packageChariowEnabled,
           reason,
         };
       }
@@ -262,17 +327,96 @@ export default function AdminDashboard() {
   };
 
   const normalizedQuery = query.trim().toLowerCase();
+
+  const saveNotificationRecipient = async () => {
+    setBusy(true);
+    try {
+      await adminRequest('/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        action: 'upsert-notification-recipient', channel: recipientChannel,
+        destination: recipientDestination, minimumSeverity: 'info', reason: recipientReason,
+      }) });
+      setRecipientDestination(''); setRecipientReason('');
+      toast.success('Notification recipient saved.');
+      await loadData();
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not save recipient.'); }
+    finally { setBusy(false); }
+  };
+
+  const selectSupportThread = async (threadId: string) => {
+    setSupportBusy(true);
+    try {
+      const data = await adminRequest<{ threads: SupportThread[]; thread: SupportThread | null; messages: SupportMessage[] }>(
+        `/admin?action=support&threadId=${encodeURIComponent(threadId)}`,
+      );
+      setSupportThreads(data.threads);
+      setSupportThread(data.thread);
+      setSupportMessages(data.messages);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not load the support conversation.');
+    } finally {
+      setSupportBusy(false);
+    }
+  };
+
+  const sendSupportReply = async () => {
+    const message = supportReply.trim();
+    if (!supportThread || !message) return;
+    setSupportBusy(true);
+    try {
+      await adminRequest('/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'support-reply',
+          threadId: supportThread.id,
+          message,
+          notifyWhatsApp: supportNotifyWhatsApp,
+        }),
+      });
+      setSupportReply('');
+      toast.success('Réponse envoyée au client.');
+      await selectSupportThread(supportThread.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not send the support reply.');
+    } finally {
+      setSupportBusy(false);
+    }
+  };
+
+  const updateSupportThread = async (status: SupportThread['status'], priority = supportThread?.priority || 'normal') => {
+    if (!supportThread) return;
+    setSupportBusy(true);
+    try {
+      await adminRequest('/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'support-update', threadId: supportThread.id, status, priority, reason: supportReason,
+        }),
+      });
+      toast.success('Conversation support mise à jour et auditée.');
+      await selectSupportThread(supportThread.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update the support conversation.');
+    } finally {
+      setSupportBusy(false);
+    }
+  };
   const visibleClients = clients.filter((client) =>
     !normalizedQuery || `${client.name || ''} ${client.email}`.toLowerCase().includes(normalizedQuery));
   const visiblePayments = payments.filter((payment) =>
     (paymentFilter === 'all' || payment.status === paymentFilter)
-    && (!normalizedQuery || `${payment.user?.name || ''} ${payment.user?.email || ''} ${payment.reference || ''}`.toLowerCase().includes(normalizedQuery)));
+    && (!normalizedQuery || `${payment.user?.name || ''} ${payment.user?.email || ''} ${payment.provider_reference || ''}`.toLowerCase().includes(normalizedQuery)));
+  const visibleSupportThreads = supportThreads.filter((thread) => {
+    if (supportFilter === 'active') return thread.status === 'open' || thread.status === 'pending';
+    return supportFilter === 'all' || thread.status === supportFilter;
+  });
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">Secure operations</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Secure operations</p>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Administration</h1>
           <p className="mt-1 text-sm text-muted-foreground">Clients, licenses, billing, payments, and immutable audit history.</p>
         </div>
@@ -281,12 +425,14 @@ export default function AdminDashboard() {
         </Button>
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric title="Clients" value={overview.totalUsers} icon={<Users className="size-4" />} />
         <Metric title="Wallet credits" value={overview.totalCredits} icon={<CreditCard className="size-4" />} />
         <Metric title="Active PRO" value={overview.activeProLicenses} icon={<ShieldCheck className="size-4" />} />
-        <Metric title="Pending licenses" value={overview.pendingProLicenses} icon={<KeyRound className="size-4" />} />
         <Metric title="Pending payments" value={overview.pendingPayments} icon={<Activity className="size-4" />} />
+        <Metric title="Paid, not delivered" value={overview.paidNotFulfilled} icon={<Activity className="size-4" />} />
+        <Metric title="Notification failures" value={overview.failedNotifications} icon={<Bell className="size-4" />} />
+        <Metric title="Support non lu" value={supportThreads.filter((thread) => thread.unread).length} icon={<MessagesSquare className="size-4" />} />
       </div>
 
       <Tabs defaultValue="overview">
@@ -295,6 +441,9 @@ export default function AdminDashboard() {
           <TabsTrigger value="clients">Clients</TabsTrigger>
           <TabsTrigger value="licenses">Licenses</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
+          <TabsTrigger value="ledger">Credit ledger</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="support">Support</TabsTrigger>
           <TabsTrigger value="usage">Usage</TabsTrigger>
           <TabsTrigger value="packages">Packages</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
@@ -302,14 +451,25 @@ export default function AdminDashboard() {
 
         <TabsContent value="overview" className="grid gap-5 lg:grid-cols-2">
           <Card>
-            <CardHeader><CardTitle>Revenue by currency</CardTitle><CardDescription>Currencies are never combined.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Cash actually received</CardTitle><CardDescription>Gross, fees and net stay separated by currency. Manual credits are excluded.</CardDescription></CardHeader>
             <CardContent className="space-y-3">
-              {Object.entries(overview.revenueByCurrency).length ? Object.entries(overview.revenueByCurrency).map(([currency, value]) => (
-                <div key={currency} className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
+              {Object.entries(overview.cashByCurrency).length ? Object.entries(overview.cashByCurrency).map(([currency, value]) => (
+                <div key={currency} className="rounded-lg border border-border/60 px-4 py-3">
+                  <div className="flex items-center justify-between">
                   <span className="font-mono text-xs text-muted-foreground">{currency}</span>
-                  <strong>{Number(value).toLocaleString()} {currency}</strong>
+                  <strong>{Number(value.net).toLocaleString()} {currency} net</strong>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">Gross {value.gross.toLocaleString()} · Fees {value.fees.toLocaleString()} · Refunded/disputed {value.refunded.toLocaleString()}</p>
                 </div>
               )) : <Empty label="No confirmed revenue." />}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Credit movements</CardTitle><CardDescription>Purchased, manually adjusted and consumed credits never mix with cash.</CardDescription></CardHeader>
+            <CardContent className="space-y-3">
+              {Object.entries(overview.creditMovements).length ? Object.entries(overview.creditMovements).map(([type, value]) => (
+                <div key={type} className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3"><span>{type.replace('_', ' ')}</span><strong>{value > 0 ? '+' : ''}{value.toLocaleString()} cr</strong></div>
+              )) : <Empty label="No ledger movements." />}
             </CardContent>
           </Card>
           <Card>
@@ -335,7 +495,7 @@ export default function AdminDashboard() {
                     <TableCell><strong>{client.name || 'Unnamed'}</strong><p className="text-xs text-muted-foreground">{client.email}</p></TableCell>
                     <TableCell>{client.credits.toLocaleString()} cr</TableCell>
                     <TableCell>{client.proLicense ? <Badge className={licenseTone(client.proLicense.status)}>{client.proLicense.status} · {client.proLicense.credits_per_second} cr/s</Badge> : <span className="text-muted-foreground">None</span>}</TableCell>
-                    <TableCell className="text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="secondary" onClick={() => openMutation({ kind: 'credits', client })}>Adjust credits</Button>{!client.proLicense && <Button size="sm" variant="accent" onClick={() => openMutation({ kind: 'create-license', client })}><Plus className="size-3" /> License</Button>}</div></TableCell>
+                    <TableCell className="text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="secondary" onClick={() => openMutation({ kind: 'credits', client })}>Adjust credits</Button>{!client.proLicense && <Button size="sm" onClick={() => openMutation({ kind: 'create-license', client })}><Plus className="size-3" /> License</Button>}</div></TableCell>
                   </TableRow>
                 ))}
                 {!visibleClients.length && <EmptyRow columns={4} />}
@@ -355,7 +515,7 @@ export default function AdminDashboard() {
                     <TableCell><Badge className={licenseTone(license.status)}>{license.status}</Badge></TableCell>
                     <TableCell>{license.credits_per_second} cr/s</TableCell>
                     <TableCell className="font-mono">•••• {license.code_last4}</TableCell>
-                    <TableCell className="text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="secondary" onClick={() => openMutation({ kind: 'license', license, action: 'set_rate' })}>Rate</Button>{license.status === 'revoked' ? <Button size="sm" variant="accent" onClick={() => openMutation({ kind: 'license', license, action: 'reactivate' })}>Reactivate</Button> : <Button size="sm" variant="destructive" onClick={() => openMutation({ kind: 'license', license, action: 'revoke' })}>Revoke</Button>}</div></TableCell>
+                    <TableCell className="text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="secondary" onClick={() => openMutation({ kind: 'license', license, action: 'set_rate' })}>Rate</Button>{license.status === 'revoked' ? <Button size="sm" onClick={() => openMutation({ kind: 'license', license, action: 'reactivate' })}>Reactivate</Button> : <Button size="sm" variant="danger" onClick={() => openMutation({ kind: 'license', license, action: 'revoke' })}>Revoke</Button>}</div></TableCell>
                   </TableRow>
                 ))}
                 {!licenses.length && <EmptyRow columns={5} />}
@@ -365,23 +525,188 @@ export default function AdminDashboard() {
         </TabsContent>
 
         <TabsContent value="payments">
-          <DataCard title="Payment review" description="Confirmation credits the wallet exactly once and requires an audit reason." action={<div className="flex gap-2"><SearchBox value={query} onChange={setQuery} /><select className="rounded-md border border-border bg-background px-3 text-sm" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="pending">Pending</option><option value="completed">Completed</option><option value="failed">Failed</option><option value="all">All</option></select></div>}>
+          <DataCard title="Payment operations" description="Verified provider payments are delivered automatically. Paid-but-undelivered rows are operational incidents." action={<div className="flex gap-2"><SearchBox value={query} onChange={setQuery} /><select className="rounded-md border border-border bg-background px-3 text-sm" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="pending">Pending</option><option value="paid">Paid</option><option value="failed">Failed</option><option value="all">All</option></select></div>}>
             <Table>
-              <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Amount</TableHead><TableHead>Provider</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Decision</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Cash</TableHead><TableHead>Provider</TableHead><TableHead>Payment</TableHead><TableHead>Delivery</TableHead></TableRow></TableHeader>
               <TableBody>
                 {visiblePayments.map((payment) => (
-                  <TableRow key={`${payment.source}-${payment.id}`}>
+                  <TableRow key={`${payment.provider}-${payment.id}`}>
                     <TableCell>{payment.user?.name || 'Unknown'}<p className="text-xs text-muted-foreground">{payment.user?.email}</p></TableCell>
-                    <TableCell>{Number(payment.amount).toLocaleString()} {payment.currency || 'UNKNOWN'}<p className="text-xs text-muted-foreground">{payment.credits || 0} cr</p></TableCell>
-                    <TableCell>{payment.source}<p className="font-mono text-xs text-muted-foreground">{payment.provider_status || payment.reference || 'n/a'}</p></TableCell>
+                    <TableCell>{Number(payment.gross_amount).toLocaleString()} {payment.currency || 'UNKNOWN'}<p className="text-xs text-muted-foreground">Net {Number(payment.net_amount ?? payment.gross_amount).toLocaleString()} · {payment.credits_purchased || 0} cr</p></TableCell>
+                    <TableCell>{payment.provider}<p className="font-mono text-xs text-muted-foreground">{payment.provider_status || payment.provider_reference || 'n/a'}</p></TableCell>
                     <TableCell><Badge variant="outline">{payment.status}</Badge></TableCell>
-                    <TableCell className="text-right">{payment.status === 'pending' && <div className="flex justify-end gap-2"><Button size="sm" variant="accent" disabled={payment.source === 'crypto' && payment.provider_status !== 'SUCCESSFUL'} onClick={() => openMutation({ kind: 'payment', payment, status: 'completed' })}><Check className="size-3" /> Confirm</Button><Button size="sm" variant="destructive" onClick={() => openMutation({ kind: 'payment', payment, status: 'failed' })}><X className="size-3" /> Decline</Button></div>}</TableCell>
+                    <TableCell><Badge className={payment.fulfilment_status === 'fulfilled' ? licenseTone('active') : licenseTone(payment.fulfilment_status === 'pending' ? 'pending' : 'revoked')}>{payment.fulfilment_status}</Badge></TableCell>
                   </TableRow>
                 ))}
                 {!visiblePayments.length && <EmptyRow columns={5} />}
               </TableBody>
             </Table>
           </DataCard>
+        </TabsContent>
+
+        <TabsContent value="ledger">
+          <DataCard title="Immutable credit ledger" description="Every purchase, manual adjustment and session consumption shows the before/after wallet balance.">
+            <Table><TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Client</TableHead><TableHead>Origin</TableHead><TableHead>Change</TableHead><TableHead>Balance</TableHead></TableRow></TableHeader><TableBody>
+              {ledger.map((row) => <TableRow key={row.id}><TableCell>{new Date(row.created_at).toLocaleString()}</TableCell><TableCell>{row.user?.email || 'Unknown'}</TableCell><TableCell>{row.entry_type.replace('_', ' ')}</TableCell><TableCell className={row.credits_delta > 0 ? 'text-emerald-400' : 'text-red-400'}>{row.credits_delta > 0 ? '+' : ''}{row.credits_delta.toLocaleString()} cr</TableCell><TableCell>{row.balance_before.toLocaleString()} → {row.balance_after.toLocaleString()}</TableCell></TableRow>)}
+              {!ledger.length && <EmptyRow columns={5} />}
+            </TableBody></Table>
+          </DataCard>
+        </TabsContent>
+
+        <TabsContent value="support">
+          <Card>
+            <CardHeader className="flex flex-row items-start justify-between gap-4">
+              <div>
+                <CardTitle>Boîte de réception support</CardTitle>
+                <CardDescription>Les messages restent dans Henshin. Baileys envoie uniquement les notifications WhatsApp.</CardDescription>
+              </div>
+              <select
+                className="h-9 rounded-lg border border-border bg-background px-3 text-sm"
+                value={supportFilter}
+                onChange={(event) => setSupportFilter(event.target.value)}
+              >
+                <option value="active">Actives</option>
+                <option value="open">Ouvertes</option>
+                <option value="pending">En attente client</option>
+                <option value="resolved">Résolues</option>
+                <option value="closed">Fermées</option>
+                <option value="all">Toutes</option>
+              </select>
+            </CardHeader>
+            <CardContent>
+              <div className="grid min-h-[620px] overflow-hidden rounded-xl border border-border/70 lg:grid-cols-[320px_minmax(0,1fr)]">
+                <aside className="border-b border-border/70 bg-muted/20 lg:border-b-0 lg:border-r">
+                  <div className="max-h-[620px] overflow-y-auto p-2">
+                    {visibleSupportThreads.map((thread) => (
+                      <button
+                        type="button"
+                        key={thread.id}
+                        onClick={() => void selectSupportThread(thread.id)}
+                        className={`mb-1 w-full rounded-lg border px-3 py-3 text-left transition-colors ${
+                          supportThread?.id === thread.id
+                            ? 'border-violet-500/50 bg-violet-500/10'
+                            : 'border-transparent hover:border-border hover:bg-muted/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <strong className="truncate text-sm">{thread.user?.name || thread.user?.email || 'Client'}</strong>
+                          {thread.unread ? <span className="size-2 shrink-0 rounded-full bg-violet-500" aria-label="Non lu" /> : null}
+                        </div>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{thread.user?.email}</p>
+                        <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                          <Badge variant="outline">{thread.status}</Badge>
+                          <time>{new Date(thread.last_message_at).toLocaleString()}</time>
+                        </div>
+                      </button>
+                    ))}
+                    {!visibleSupportThreads.length ? <Empty label="Aucune conversation support." /> : null}
+                  </div>
+                </aside>
+
+                <section className="flex min-w-0 flex-col bg-background">
+                  {supportThread ? (
+                    <>
+                      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 p-4">
+                        <div>
+                          <h3 className="font-semibold">{supportThread.user?.name || 'Client Henshin'}</h3>
+                          <p className="text-xs text-muted-foreground">{supportThread.user?.email}</p>
+                          {supportThread.whatsapp_number ? <p className="mt-1 font-mono text-[11px] text-muted-foreground">WhatsApp {supportThread.whatsapp_number}</p> : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            aria-label="Priorité support"
+                            className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+                            value={supportThread.priority}
+                            onChange={(event) => void updateSupportThread(supportThread.status, event.target.value as SupportThread['priority'])}
+                            disabled={supportBusy || supportReason.trim().length < 3}
+                          >
+                            <option value="low">Basse</option>
+                            <option value="normal">Normale</option>
+                            <option value="high">Haute</option>
+                            <option value="urgent">Urgente</option>
+                          </select>
+                          {supportThread.status !== 'resolved' ? (
+                            <Button size="sm" variant="secondary" disabled={supportBusy || supportReason.trim().length < 3} onClick={() => void updateSupportThread('resolved')}>Résoudre</Button>
+                          ) : (
+                            <Button size="sm" variant="secondary" disabled={supportBusy || supportReason.trim().length < 3} onClick={() => void updateSupportThread('open')}>Rouvrir</Button>
+                          )}
+                          <Button size="sm" variant="ghost" disabled={supportBusy || supportReason.trim().length < 3} onClick={() => void updateSupportThread('closed')}>Fermer</Button>
+                        </div>
+                      </header>
+
+                      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-muted/10 p-4">
+                        {supportMessages.map((message) => (
+                          <article
+                            key={message.id}
+                            className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm ${
+                              message.sender_role === 'admin'
+                                ? 'ml-auto rounded-br-md bg-violet-600 text-white'
+                                : 'mr-auto rounded-bl-md border border-border bg-background text-foreground'
+                            }`}
+                          >
+                            <p className="whitespace-pre-wrap break-words">{message.body}</p>
+                            <div className={`mt-1 flex items-center justify-end gap-2 text-[10px] ${message.sender_role === 'admin' ? 'text-white/65' : 'text-muted-foreground'}`}>
+                              <time>{new Date(message.created_at).toLocaleString()}</time>
+                              {message.sender_role === 'admin' && message.whatsapp_delivery_status !== 'not_requested'
+                                ? <span>WA: {message.whatsapp_delivery_status}</span> : null}
+                            </div>
+                          </article>
+                        ))}
+                        {!supportMessages.length ? <Empty label="Cette conversation ne contient aucun message." /> : null}
+                      </div>
+
+                      <footer className="space-y-3 border-t border-border/70 p-4">
+                        <textarea
+                          className="min-h-24 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+                          value={supportReply}
+                          onChange={(event) => setSupportReply(event.target.value)}
+                          maxLength={4000}
+                          placeholder="Répondre au client…"
+                        />
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={supportNotifyWhatsApp}
+                              onChange={(event) => setSupportNotifyWhatsApp(event.target.checked)}
+                              disabled={!supportThread.whatsapp_number}
+                            />
+                            Notifier aussi sur WhatsApp
+                          </label>
+                          <Button disabled={supportBusy || !supportReply.trim()} onClick={() => void sendSupportReply()}>
+                            <Send className="size-4" /> {supportBusy ? 'Envoi…' : 'Envoyer la réponse'}
+                          </Button>
+                        </div>
+                        <Input
+                          value={supportReason}
+                          onChange={(event) => setSupportReason(event.target.value)}
+                          placeholder="Motif d’audit pour les changements de statut/priorité"
+                          minLength={3}
+                          maxLength={500}
+                        />
+                      </footer>
+                    </>
+                  ) : (
+                    <div className="grid flex-1 place-items-center p-8 text-center text-sm text-muted-foreground">
+                      Sélectionnez une conversation client.
+                    </div>
+                  )}
+                </section>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="notifications">
+          <div className="space-y-5">
+          <Card><CardHeader><CardTitle>Admin recipients</CardTitle><CardDescription>The delivery gateway routes these destinations to Gmail, WhatsApp or SMS.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="flex flex-wrap gap-2">{notificationRecipients.map((recipient) => <Badge key={recipient.id} variant="outline">{recipient.channel}: {recipient.destination}</Badge>)}</div><div className="grid gap-3 md:grid-cols-4"><select className="h-9 rounded-lg border border-border bg-background px-3 text-sm" value={recipientChannel} onChange={(event) => setRecipientChannel(event.target.value)}><option value="email">Email</option><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option></select><Input value={recipientDestination} onChange={(event) => setRecipientDestination(event.target.value)} placeholder="Address or E.164 number" /><Input value={recipientReason} onChange={(event) => setRecipientReason(event.target.value)} placeholder="Audit reason" /><Button disabled={busy || !recipientDestination || recipientReason.length < 3} onClick={() => void saveNotificationRecipient()}>Add recipient</Button></div></CardContent></Card>
+          <DataCard title="Notification delivery" description="Email, WhatsApp and SMS deliveries are deduplicated and retried with exponential backoff.">
+            <Table><TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Event</TableHead><TableHead>Destination</TableHead><TableHead>Status</TableHead><TableHead>Error</TableHead></TableRow></TableHeader><TableBody>
+              {notifications.map((row) => <TableRow key={row.id}><TableCell>{new Date(row.created_at).toLocaleString()}</TableCell><TableCell>{row.event_type}<p className="text-xs text-muted-foreground">{row.severity}</p></TableCell><TableCell>{row.channel}: {row.destination}</TableCell><TableCell><Badge variant="outline">{row.status} · {row.attempts}</Badge></TableCell><TableCell className="max-w-xs truncate text-xs text-red-300">{row.last_error || '—'}</TableCell></TableRow>)}
+              {!notifications.length && <EmptyRow columns={5} />}
+            </TableBody></Table>
+          </DataCard>
+          </div>
         </TabsContent>
 
         <TabsContent value="usage">
@@ -397,12 +722,12 @@ export default function AdminDashboard() {
         </TabsContent>
 
         <TabsContent value="packages">
-          <DataCard title="Credit packages" description="Package changes pass through the authenticated admin API." action={<Button variant="accent" size="sm" onClick={() => openMutation({ kind: 'package' })}><Plus className="size-3" /> Add package</Button>}>
+          <DataCard title="Credit packages" description="Package changes pass through the authenticated admin API." action={<Button size="sm" onClick={() => openMutation({ kind: 'package' })}><Plus className="size-3" /> Add package</Button>}>
             <Table>
-              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Credits</TableHead><TableHead>USD</TableHead><TableHead>XAF</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Credits</TableHead><TableHead>USD</TableHead><TableHead>XAF</TableHead><TableHead>Chariow</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
               <TableBody>
-                {packages.map((item) => <TableRow key={item.id}><TableCell>{item.name}</TableCell><TableCell>{item.credits.toLocaleString()}</TableCell><TableCell>${item.price_usd}</TableCell><TableCell>{item.price_xaf.toLocaleString()} XAF</TableCell><TableCell className="text-right"><Button size="sm" variant="secondary" onClick={() => openMutation({ kind: 'package', package: item })}>Edit</Button></TableCell></TableRow>)}
-                {!packages.length && <EmptyRow columns={5} />}
+                {packages.map((item) => <TableRow key={item.id}><TableCell>{item.name}</TableCell><TableCell>{item.credits.toLocaleString()}</TableCell><TableCell>${item.price_usd}</TableCell><TableCell>{item.price_xaf.toLocaleString()} XAF</TableCell><TableCell>{item.chariow_enabled ? <Badge className={licenseTone('active')}>Enabled</Badge> : 'Off'}<p className="font-mono text-xs text-muted-foreground">{item.chariow_product_id || 'not mapped'}</p></TableCell><TableCell className="text-right"><Button size="sm" variant="secondary" onClick={() => openMutation({ kind: 'package', package: item })}>Edit</Button></TableCell></TableRow>)}
+                {!packages.length && <EmptyRow columns={6} />}
               </TableBody>
             </Table>
           </DataCard>
@@ -426,10 +751,10 @@ export default function AdminDashboard() {
           <DialogHeader><DialogTitle>{mutationTitle(mutation)}</DialogTitle><DialogDescription>Every change requires a clear operational reason and is associated with your administrator account.</DialogDescription></DialogHeader>
           <form onSubmit={submitMutation} className="space-y-4">
             {mutation?.kind === 'credits' && <Field label="Credit change"><Input type="number" step="1" placeholder="Use a negative value to deduct" value={amount} onChange={(event) => setAmount(event.target.value)} required /></Field>}
-            {(mutation?.kind === 'create-license' || (mutation?.kind === 'license' && mutation.action === 'set_rate')) && <Field label="Credits per second"><Input type="number" min="1" step="1" value={rate} onChange={(event) => setRate(event.target.value)} required /><p className="text-xs text-muted-foreground">Default future rate: 80. Negotiated first-client rate: 46.</p></Field>}
-            {mutation?.kind === 'package' && <><Field label="Package name"><Input value={packageName} onChange={(event) => setPackageName(event.target.value)} required /></Field><Field label="Credits"><Input type="number" min="1" step="1" value={packageCredits} onChange={(event) => setPackageCredits(event.target.value)} required /></Field><div className="grid grid-cols-2 gap-3"><Field label="Price USD"><Input type="number" min="0" step="0.01" value={packageUsd} onChange={(event) => setPackageUsd(event.target.value)} required /></Field><Field label="Price XAF"><Input type="number" min="0" step="1" value={packageXaf} onChange={(event) => setPackageXaf(event.target.value)} required /></Field></div></>}
+            {(mutation?.kind === 'create-license' || (mutation?.kind === 'license' && mutation.action === 'set_rate')) && <Field label="Credits per second"><Input type="number" min="1" step="1" value={rate} onChange={(event) => setRate(event.target.value)} required /><p className="text-xs text-muted-foreground">Standard PRO rate: 80 credits per second. Any account-specific rate must be contractually approved and audited.</p></Field>}
+            {mutation?.kind === 'package' && <><Field label="Package name"><Input value={packageName} onChange={(event) => setPackageName(event.target.value)} required /></Field><Field label="Credits"><Input type="number" min="1" step="1" value={packageCredits} onChange={(event) => setPackageCredits(event.target.value)} required /></Field><div className="grid grid-cols-2 gap-3"><Field label="Price USD"><Input type="number" min="0" step="0.01" value={packageUsd} onChange={(event) => setPackageUsd(event.target.value)} required /></Field><Field label="Price XAF"><Input type="number" min="0" step="1" value={packageXaf} onChange={(event) => setPackageXaf(event.target.value)} required /></Field></div><Field label="Chariow product ID"><Input value={packageChariowProduct} onChange={(event) => setPackageChariowProduct(event.target.value)} placeholder="prd_..." /></Field><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={packageChariowEnabled} onChange={(event) => setPackageChariowEnabled(event.target.checked)} /> Enable international checkout</label></>}
             <Field label="Audit reason"><Input value={reason} minLength={3} maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder="Why is this change required?" required /></Field>
-            <DialogFooter><Button type="button" variant="minimal" onClick={() => setMutation(null)}>Cancel</Button><Button type="submit" variant={mutation?.kind === 'payment' && mutation.status === 'failed' || mutation?.kind === 'license' && mutation.action === 'revoke' ? 'destructive' : 'accent'} disabled={busy}>{busy ? 'Saving...' : 'Confirm change'}</Button></DialogFooter>
+            <DialogFooter><Button type="button" variant="ghost" onClick={() => setMutation(null)}>Cancel</Button><Button type="submit" variant={mutation?.kind === 'license' && mutation.action === 'revoke' ? 'danger' : 'primary'} disabled={busy}>{busy ? 'Saving...' : 'Confirm change'}</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -437,8 +762,8 @@ export default function AdminDashboard() {
       <Dialog open={revealedCode !== null} onOpenChange={(open) => !open && setRevealedCode(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>PRO license generated</DialogTitle><DialogDescription>This full code is shown once. Regeneration replaces it.</DialogDescription></DialogHeader>
-          <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-center font-mono text-sm text-blue-200">{revealedCode}</div>
-          <DialogFooter><Button variant="accent" onClick={() => { if (revealedCode) void navigator.clipboard.writeText(revealedCode); toast.success('License code copied.'); }}><Clipboard className="size-4" /> Copy once</Button></DialogFooter>
+          <div className="rounded-lg border border-white/[0.10] bg-white/[0.04] p-4 text-center font-mono text-sm text-foreground">{revealedCode}</div>
+          <DialogFooter><Button onClick={() => { if (revealedCode) void navigator.clipboard.writeText(revealedCode); toast.success('License code copied.'); }}><Clipboard className="size-4" /> Copy once</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -446,7 +771,7 @@ export default function AdminDashboard() {
 }
 
 function Metric({ title, value, icon }: { title: string; value: number; icon: React.ReactNode }) {
-  return <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle><span className="text-blue-400">{icon}</span></CardHeader><CardContent><p className="text-2xl font-semibold"><AnimatedNumber value={Number(value || 0)} /></p></CardContent></Card>;
+  return <Card className="gap-3"><CardHeader className="flex flex-row items-center justify-between"><CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle><span className="text-foreground/70">{icon}</span></CardHeader><CardContent><p className="text-2xl font-semibold tabular-nums tracking-tight"><AnimatedNumber value={Number(value || 0)} /></p></CardContent></Card>;
 }
 
 function DataCard({ title, description, action, children }: { title: string; description: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -474,6 +799,5 @@ function mutationTitle(mutation: Mutation | null) {
   if (mutation.kind === 'credits') return `Adjust credits for ${mutation.client.email}`;
   if (mutation.kind === 'create-license') return `Generate PRO license for ${mutation.client.email}`;
   if (mutation.kind === 'license') return `${mutation.action.replace('_', ' ')} PRO license`;
-  if (mutation.kind === 'payment') return `${mutation.status === 'completed' ? 'Confirm' : 'Decline'} payment`;
   return mutation.package ? 'Edit credit package' : 'Create credit package';
 }

@@ -19,6 +19,8 @@ import fapshiWebhook from '../server/fapshi-webhook.ts';
 import reactorToken from '../api/reactor-token.ts';
 import chariowInit from '../server/chariow-init.ts';
 import chariowPulse from '../server/chariow-pulse.ts';
+import support from '../server/support.ts';
+import dispatchNotifications from '../server/dispatch-notifications.ts';
 
 const app = express();
 const port = Number(process.env.HENSHIN_LOCAL_API_PORT || 3001);
@@ -62,6 +64,8 @@ app.use(express.json({ limit: '15mb' }));
 
 mount('/api/auth/resolve-user', resolveUser);
 mount('/api/admin', admin);
+mount('/api/support', support);
+mount('/api/dispatch-notifications', dispatchNotifications);
 mount('/api/activate-session', activateSession);
 mount('/api/end-session', endSession);
 mount('/api/fal-realtime-token', falRealtimeToken);

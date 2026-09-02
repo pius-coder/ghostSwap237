@@ -1,9 +1,10 @@
 // Studio workspace ? fxswap37 layout integrated into Henshin:
-// persona panel (left) + Stage with draggable camera PiP + SessionBar.
+// Stage + persona inspector with a fixed source-camera preview + SessionBar.
 // Engines: Reactor X2 (Fast) and fal.ai Lucy 2.5 (PRO).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X2Provider } from '@reactor-models/x2';
+import { Camera, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useApp } from '@/context/AppContext';
@@ -20,13 +21,13 @@ import { FalLucySessionProvider } from '@/lib/session/FalLucySessionProvider';
 import { useVirtualCameraCapture } from '@/services/useVirtualCameraCapture';
 import { useSourcePublisher } from '@/components/studio/useSourcePublisher';
 import { Stage } from '@/components/studio/Stage';
-import { SessionBar } from '@/components/studio/SessionBar';
+import { SessionBar, type SessionOperation } from '@/components/studio/SessionBar';
 import { PersonaPanel } from '@/components/studio/PersonaPanel';
 import { CameraPickerDialog } from '@/components/studio/CameraPickerDialog';
-import { SessionHistoryDialog } from '@/components/studio/SessionHistoryDialog';
+import { useStudioCamera } from '@/components/studio/useStudioCamera';
 import { ProAccessDialog } from '@/components/ProAccessDialog';
 import { useProAccess } from '@/hooks/useProAccess';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton, IconButton, InlineAlert } from '@/components/app';
 import { formatDuration } from '@/i18n/format';
 import { useLocalePreference } from '@/i18n/useLocalePreference';
 
@@ -90,6 +91,7 @@ export default function Dashboard() {
       <Workspace
         liveProvider={authorizedLiveProvider}
         proCreditsPerSecond={proAccess.creditsPerSecond}
+        proAllowed={proAccess.active}
         onLiveProviderChange={onLiveProviderChange}
       />
     </FalLucySessionProvider>
@@ -99,6 +101,7 @@ export default function Dashboard() {
         <Workspace
           liveProvider={authorizedLiveProvider}
           proCreditsPerSecond={proAccess.creditsPerSecond}
+          proAllowed={proAccess.active}
           onLiveProviderChange={onLiveProviderChange}
         />
       </JsSessionProvider>
@@ -125,33 +128,27 @@ export default function Dashboard() {
 function Workspace({
   liveProvider,
   proCreditsPerSecond,
+  proAllowed,
   onLiveProviderChange,
 }: {
   liveProvider: LiveProvider;
   proCreditsPerSecond: number | null;
+  proAllowed: boolean;
   onLiveProviderChange: (next: LiveProvider) => void;
 }) {
   const { t } = useTranslation();
   const { locale } = useLocalePreference();
   const { user } = useAuth();
-  const { credits, setCredits, setSessionStatus, refreshCredits, sessionHistory } = useApp();
+  const { credits, setCredits, setSessionStatus, refreshCredits } = useApp();
   const session = useSessionCommands();
 
-  const [panelOpen, setPanelOpen] = useState(true);
   const [resetNonce, setResetNonce] = useState(0);
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<SessionOperation>('idle');
   const busyRef = useRef(false);
 
-  const [cameraOn, setCameraOn] = useState(false);
-  const [cameraDeviceId, setCameraDeviceId] = useState<string | null>(null);
-  const [cameraLabel, setCameraLabel] = useState('');
-  const [cameraPickerOpen, setCameraPickerOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [currentUsage, setCurrentUsage] = useState({ seconds: 0, credits: 0 });
   const [sessionRate, setSessionRate] = useState(liveProvider === 'fast' ? 2 : proCreditsPerSecond || 80);
 
-  const [sourceStream, setSourceStream] = useState<MediaStream | null>(null);
-  const [sourceTrack, setSourceTrack] = useState<MediaStreamTrack | null>(null);
   const [activePersona, setActivePersona] = useState<Persona | null>(null);
 
   const [actionError, setActionError] = useState<string | null>(null);
@@ -164,7 +161,18 @@ function Workspace({
   const metadataRef = useRef(session.metadata);
   const providerSessionIdRef = useRef(session.providerSessionId);
   const billingSessionRef = useRef<string | null>(null);
-  const sourceStreamRef = useRef<MediaStream | null>(null);
+  const camera = useStudioCamera(liveProvider);
+  const {
+    cameraOn,
+    deviceId: cameraDeviceId,
+    label: cameraLabel,
+    pickerOpen: cameraPickerOpen,
+    setPickerOpen: setCameraPickerOpen,
+    sourceStream,
+    sourceTrack,
+    setSourceTrack,
+    webcamVideoRef,
+  } = camera;
 
   useEffect(() => {
     statusRef.current = session.status;
@@ -175,11 +183,6 @@ function Workspace({
     providerSessionIdRef.current = session.providerSessionId;
   }, [session.metadata, session.providerSessionId]);
 
-  useEffect(() => {
-    sourceStreamRef.current = sourceStream;
-  }, [sourceStream]);
-
-  const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
   const outputHostRef = useRef<HTMLDivElement | null>(null);
 
   const isElectron =
@@ -244,43 +247,12 @@ function Workspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, setCredits]);
 
-  // -- Camera ----------------------------------------------------------------
-  const activateCamera = async (deviceId: string) => {
-    try {
-      const constraints: MediaTrackConstraints = {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 30, max: 30 },
-      };
-      if (deviceId) constraints.deviceId = { exact: deviceId };
-      else constraints.facingMode = 'user';
-
-      const stream = await navigator.mediaDevices.getUserMedia({ video: constraints, audio: false });
-      const [track] = stream.getVideoTracks();
-      if (track) track.contentHint = liveProvider === 'pro' ? 'motion' : 'detail';
-
-      sourceStream?.getTracks().forEach((t) => t.stop());
-      setSourceStream(stream);
-      setSourceTrack(track ?? null);
-      setCameraOn(true);
-      setCameraPickerOpen(false);
-    } catch (error) {
-      console.error('Webcam error:', error);
-      toast.error(t('studio.webcamFailed'));
-    }
-  };
-
   const stopCamera = async () => {
     if (busyRef.current) return;
     if (statusRef.current !== 'disconnected') {
       await handleStop(false, 'camera_stopped');
     }
-    sourceStreamRef.current?.getTracks().forEach((t) => t.stop());
-    setSourceStream(null);
-    setSourceTrack(null);
-    setCameraOn(false);
-    setCameraDeviceId(null);
-    setCameraLabel('');
+    camera.release();
   };
 
   // -- Session controls ------------------------------------------------------
@@ -300,7 +272,7 @@ function Workspace({
     }
 
     busyRef.current = true;
-    setBusy(true);
+    setOperation('starting');
     setActionError(null);
 
     let openedSessionId: string | null = null;
@@ -387,14 +359,14 @@ function Workspace({
       setSessionStatus('IDLE');
     } finally {
       busyRef.current = false;
-      setBusy(false);
+      setOperation('idle');
     }
   };
 
   async function handleStop(showToast = true, reason = 'user_stop') {
     if (busyRef.current) return;
     busyRef.current = true;
-    setBusy(true);
+    setOperation('stopping');
     setActionError(null);
     stopPolling();
 
@@ -433,7 +405,7 @@ function Workspace({
     setResetNonce((n) => n + 1);
 
     busyRef.current = false;
-    setBusy(false);
+    setOperation('idle');
     if (showToast) toast.info(t('studio.sessionStopped'));
   }
 
@@ -483,7 +455,6 @@ function Workspace({
         }).catch(() => {});
       }
       stopPolling();
-      sourceStreamRef.current?.getTracks().forEach((track) => track.stop());
       void session.disconnect().catch(() => {});
       closeObsPreviewWindow(false);
     };
@@ -502,101 +473,130 @@ function Workspace({
 
   const selectedRate = liveProvider === 'fast' ? CREDITS_PER_SECOND : proCreditsPerSecond || sessionRate;
   const remainingSeconds = Math.max(0, Math.floor(credits / selectedRate));
-  const remainingLabel = remainingSeconds > 0
+  const creditsOk = remainingSeconds > 0;
+  const remainingLabel = creditsOk
     ? t('studio.remainingLeft', { duration: formatDuration(remainingSeconds, locale) })
     : t('studio.noCredits');
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 gap-3">
-      {/* Left tab shell ? Persona */}
-      <aside
-        className={`h-full shrink-0 flex-col overflow-hidden transition-all duration-300 ${
-          panelOpen ? 'flex w-full lg:w-[338px]' : 'hidden'
-        }`}
-      >
-        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
-          {(actionError || publishError) && (
-            <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs leading-snug text-red-400">
-              {formatReactorFailure(actionError) || actionError || publishError}
-              <TextureButton
-                variant="destructive"
-                size="icon"
-                aria-label={t('common.dismiss')}
-                className="float-right ml-2 !bg-transparent"
-                contentClassName="!size-5 !bg-transparent text-red-300 hover:text-white"
-                onClick={() => {
-                  setActionError(null);
-                  setPublishError(null);
-                }}
-              >
-                ?
-              </TextureButton>
-            </p>
-          )}
-          <PersonaPanel
-            key={`persona${resetNonce}`}
-            resetNonce={resetNonce}
-            sourceStream={sourceStream}
-            onActivePersonaChange={setActivePersona}
-            onCollapse={() => setPanelOpen(false)}
-          />
-        </div>
-      </aside>
+    <div className="client-studio-shell flex h-full min-h-0 w-full flex-1 flex-col">
+      <div className="client-studio-workspace flex min-h-0 flex-1">
+        <div className="client-studio-primary flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="studio-canvas relative min-h-0 flex-1 overflow-hidden">
+            <Stage
+              generating={session.metadata.generating}
+              activeLabel={activePersona?.name ?? null}
+              cameraOn={cameraOn}
+              sourceStream={sourceStream}
+              remoteStream={session.remoteStream ?? null}
+              remotePlayNonce={session.remotePlayNonce}
+              liveProvider={liveProvider}
+              webcamVideoRef={webcamVideoRef}
+              outputHostRef={outputHostRef}
+              onTrack={setSourceTrack}
+              onChooseCamera={() => setCameraPickerOpen(true)}
+            />
+          </div>
 
-      {/* Right tab shell ? Stage + SessionBar */}
-      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
-        <Stage
-          generating={session.metadata.generating}
-          activeLabel={activePersona?.name ?? null}
-          cameraOn={cameraOn}
-          sourceStream={sourceStream}
-          remoteStream={session.remoteStream ?? null}
-          remotePlayNonce={session.remotePlayNonce}
-          liveProvider={liveProvider}
-          webcamVideoRef={webcamVideoRef}
-          outputHostRef={outputHostRef}
-          onTrack={setSourceTrack}
-          onStopCamera={() => void stopCamera()}
-        />
-        <SessionBar
-          cameraOn={cameraOn}
-          cameraLabel={cameraLabel}
-          panelOpen={panelOpen}
-          activePersona={activePersona}
-          liveProvider={liveProvider}
-          remainingCreditsLabel={remainingLabel}
-          currentUsage={currentUsage}
-          onLiveProviderChange={onLiveProviderChange}
-          onOpenCameraPicker={() => setCameraPickerOpen(true)}
-          onTogglePanel={() => setPanelOpen((open) => !open)}
-          onStart={() => void handleStart()}
-          onStop={() => void handleStop()}
-          onToggleObsPreview={handleObsPreviewToggle}
-          onOpenSessionHistory={() => setHistoryOpen(true)}
-          obsActive={isObsMode}
-          busy={busy}
-          onError={setActionError}
-        />
+          <div className="client-session-dock shrink-0">
+            <SessionBar
+              cameraOn={cameraOn}
+              cameraLabel={cameraLabel}
+              activePersona={activePersona}
+              liveProvider={liveProvider}
+              creditsPerSecond={selectedRate}
+              remainingCreditsLabel={remainingLabel}
+              currentUsage={currentUsage}
+              onLiveProviderChange={onLiveProviderChange}
+              onOpenCameraPicker={() => setCameraPickerOpen(true)}
+              onStart={() => void handleStart()}
+              onStop={() => void handleStop()}
+              onToggleObsPreview={handleObsPreviewToggle}
+              obsActive={isObsMode}
+              operation={operation}
+              onError={setActionError}
+              creditsOk={creditsOk}
+              proAllowed={proAllowed}
+            />
+          </div>
+        </div>
+
+        <aside
+          className="client-persona-inspector hidden h-full w-full max-w-[320px] shrink-0 flex-col overflow-hidden transition-ui sm:flex lg:flex"
+          style={{ width: 312 }}
+        >
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+            {(actionError || publishError) && (
+              <InlineAlert tone="error" className="mb-3">
+                <span className="flex-1">
+                  {formatReactorFailure(actionError) || actionError || publishError}
+                </span>
+                <AppButton
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('common.dismiss')}
+                  className="size-7 shrink-0"
+                  onClick={() => {
+                    setActionError(null);
+                    setPublishError(null);
+                  }}
+                >
+                  ?
+                </AppButton>
+              </InlineAlert>
+            )}
+            <PersonaPanel
+              key={`persona${resetNonce}`}
+              resetNonce={resetNonce}
+              sourceStream={sourceStream}
+              onActivePersonaChange={setActivePersona}
+            />
+          </div>
+          <div className="client-source-preview shrink-0">
+            <div className="client-source-preview-frame relative aspect-video overflow-hidden">
+              {cameraOn ? (
+                <video
+                  ref={webcamVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="h-full w-full -scale-x-100 object-cover"
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="flex h-full w-full flex-col items-center justify-center gap-2"
+                  onClick={() => setCameraPickerOpen(true)}
+                >
+                  <Camera className="size-5" strokeWidth={1.5} />
+                  <span className="text-xs font-medium">{t('studio.chooseCamera')}</span>
+                </button>
+              )}
+              <div className="client-source-preview-bar absolute inset-x-0 top-0 flex h-8 items-center justify-between px-2">
+                <span>{t('studio.camera')}</span>
+                {cameraOn ? (
+                  <IconButton
+                    label={t('studio.stopCamera')}
+                    tooltipSide="left"
+                    onClick={() => void stopCamera()}
+                    className="size-7 min-h-7 min-w-7 text-white/80 hover:text-white"
+                  >
+                    <X className="size-3.5" />
+                  </IconButton>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
 
       <CameraPickerDialog
         open={cameraPickerOpen}
         initialDeviceId={cameraDeviceId}
         onClose={() => setCameraPickerOpen(false)}
-        onConfirm={(device) => {
-          setCameraDeviceId(device.deviceId);
-          setCameraLabel(device.label);
-          void activateCamera(device.deviceId);
-        }}
+        onConfirm={(device) => void camera.activate(device)}
       />
 
-      <SessionHistoryDialog
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-        sessions={sessionHistory}
-      />
-
-      {/* Publish bridge (Reactor only) */}
       {liveProvider === 'fast' && <JsPublisherBridge track={sourceTrack} onError={setPublishError} />}
     </div>
   );

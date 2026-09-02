@@ -5,9 +5,7 @@ import { CheckCircle, XCircle, Loader2, ArrowRight, Coins, ShieldCheck, Clock } 
 import { toast } from 'sonner';
 
 import { AnimatedNumber } from '@/components/ui/animated-number';
-import { CosmicButton } from '@/components/ui/cosmic-button';
-import { TextureCard } from '@/components/ui/texture-card';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton, AppSurface, IconButton } from '@/components/app';
 import { useApp } from '@/context/AppContext';
 import { apiFetch } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
@@ -218,16 +216,16 @@ function PaymentSuccess() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <div className="w-full max-w-md">
-        <TextureCard contentClassName="p-8 text-center">
+        <AppSurface elevated>
           <div className="mb-6">
             {(state === 'verifying' || state === 'pending') && (
-              <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center">
-                {state === 'pending' ? <Clock className="w-10 h-10 text-blue-400" /> : <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />}
+              <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-white/[0.06]">
+                {state === 'pending' ? <Clock className="size-8 text-warning" /> : <Loader2 className="size-8 animate-spin text-foreground" />}
               </div>
             )}
             {state === 'success' && (
-              <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center">
-                <CheckCircle className="w-10 h-10 text-blue-400" />
+              <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-success/10">
+                <CheckCircle className="size-8 text-success" />
               </div>
             )}
             {state === 'fulfilment_failed' && (
@@ -246,13 +244,13 @@ function PaymentSuccess() {
           <p className="mb-8 text-sm text-muted-foreground">{message}</p>
 
           {(state === 'success' || state === 'fulfilment_failed') && (paidAmount || paidCredits) && (
-            <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 mb-6">
+            <div className="mb-6 rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
               {paidCredits && (
                 <>
-                  <p className="text-xs text-blue-300/70 mb-1">
+                  <p className="mb-1 text-xs text-muted-foreground">
                     {state === 'success' ? t('payments.creditsAdded') : t('payments.creditsExpected')}
                   </p>
-                  <p className="text-3xl font-bold text-blue-300">
+                  <p className="text-3xl font-semibold tracking-tight text-foreground">
                     <AnimatedNumber value={paidCredits} format={(n) => formatCredits(n, locale)} />{' '}
                     {t('payments.creditsUnit')}
                   </p>
@@ -269,41 +267,41 @@ function PaymentSuccess() {
           <div className="space-y-3">
             {(state === 'pending' || state === 'failed' || state === 'fulfilment_failed' || state === 'expired') &&
               (paymentId || transactionId) && (
-                <TextureButton
+                <AppButton
                   variant="secondary"
                   size="lg"
                   onClick={() => setCheckRequest((request) => request + 1)}
                   className="w-full"
                 >
                   {t('payments.checkAgain')}
-                </TextureButton>
+                </AppButton>
               )}
 
             {(state === 'success' || state === 'fulfilment_failed' || state === 'pending') && (
               <>
-                <CosmicButton as="button" onClick={() => navigate('/credits')} className="w-full" contentClassName="min-h-12">
+                <AppButton onClick={() => navigate('/credits')} className="w-full">
                   <Coins className="w-4 h-4 mr-2" />
                   {t('payments.goCredits')}
-                </CosmicButton>
-                <TextureButton variant="minimal" onClick={() => navigate('/dashboard')} className="w-full">
+                </AppButton>
+                <AppButton variant="ghost" onClick={() => navigate('/dashboard')} className="w-full">
                   {t('payments.backDashboard')}
                   <ArrowRight className="w-4 h-4 ml-2" />
-                </TextureButton>
+                </AppButton>
               </>
             )}
 
             {(state === 'failed' || state === 'expired') && (
               <>
-                <CosmicButton as="button" onClick={() => navigate('/credits')} className="w-full" contentClassName="min-h-12">
+                <AppButton onClick={() => navigate('/credits')} className="w-full">
                   {t('payments.tryAgain')}
-                </CosmicButton>
-                <TextureButton variant="minimal" onClick={() => navigate('/dashboard')} className="w-full">
+                </AppButton>
+                <AppButton variant="ghost" onClick={() => navigate('/dashboard')} className="w-full">
                   {t('payments.backDashboard')}
-                </TextureButton>
+                </AppButton>
               </>
             )}
           </div>
-        </TextureCard>
+        </AppSurface>
 
         <p className="mt-6 text-center text-xs text-muted-foreground/60">
           {t('payments.footerNote')}

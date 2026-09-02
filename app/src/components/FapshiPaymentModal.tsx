@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Smartphone, ShieldCheck } from 'lucide-react';
-import { CosmicButton } from '@/components/ui/cosmic-button';
 import {
   Dialog,
   DialogContent,
@@ -9,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton, AppSurface, IconButton } from '@/components/app';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -117,7 +116,7 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
       }}
     >
       <DialogContent
-        className="max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto border-blue-500/20 bg-card p-6 shadow-[0_24px_80px_hsl(var(--primary)/0.2)]"
+        className="max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto bg-card"
         showCloseButton={!isRedirecting}
       >
         <DialogHeader>
@@ -129,7 +128,7 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
           </DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-xl border border-blue-500/15 bg-panel p-4">
+        <div className="rounded-lg border border-white/[0.08] bg-panel p-4">
           <div className="mb-2 flex items-center justify-between gap-4">
             <span className="text-sm text-muted-foreground">{t('payments.package')}</span>
             <span className="font-semibold text-foreground">
@@ -138,7 +137,7 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
           </div>
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm text-muted-foreground">{t('payments.amount')}</span>
-            <span className="text-xl font-bold text-primary">
+            <span className="text-xl font-semibold text-foreground">
               {plan.priceXAF > 0
                 ? formatCurrency(plan.priceXAF, 'XAF', locale)
                 : plan.priceUSD
@@ -148,20 +147,18 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
           </div>
         </div>
 
-        <div className="flex items-start gap-3 rounded-xl border border-blue-500/15 bg-primary/5 p-4">
-          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" />
+        <div className="flex items-start gap-3 rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-success" />
           <p className="text-xs leading-relaxed text-muted-foreground">
             {t('payments.fapshiAutoCredit')}
           </p>
         </div>
 
         <div className="flex flex-col gap-3">
-          <CosmicButton
-            as="button"
+          <AppButton
             onClick={handlePay}
             disabled={isRedirecting}
             className="w-full"
-            contentClassName="min-h-12"
           >
             {isRedirecting ? (
               <>
@@ -174,16 +171,16 @@ export function FapshiPaymentModal({ isOpen, onClose, plan }: FapshiPaymentModal
                 {t('payments.payWithFapshi')}
               </>
             )}
-          </CosmicButton>
-          <TextureButton
-            variant="minimal"
+          </AppButton>
+          <AppButton
+            variant="ghost"
             size="lg"
             onClick={onClose}
             disabled={isRedirecting}
             className="w-full"
           >
             {t('common.cancel')}
-          </TextureButton>
+          </AppButton>
         </div>
       </DialogContent>
     </Dialog>

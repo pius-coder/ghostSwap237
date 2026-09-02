@@ -4,7 +4,7 @@ import { KeyRound, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { TextureButton } from '@/components/ui/texture-button';
+import { AppButton, AppSurface, IconButton } from '@/components/app';
 import type { ProAccessState } from '@/hooks/useProAccess';
 
 export function ProAccessDialog({
@@ -43,7 +43,7 @@ export function ProAccessDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><KeyRound className="size-5 text-blue-400" /> {t('pro.unlockTitle')}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><KeyRound className="size-5 text-foreground" /> {t('pro.unlockTitle')}</DialogTitle>
           <DialogDescription>
             {t('pro.unlockBody')}
           </DialogDescription>
@@ -57,21 +57,21 @@ export function ProAccessDialog({
             spellCheck={false}
             required
           />
-          <TextureButton type="submit" variant="accent" disabled={busy} className="w-full">
+          <AppButton type="submit" variant="primary" disabled={busy} className="w-full">
             {busy ? t('pro.activating') : t('pro.activate')}
-          </TextureButton>
+          </AppButton>
         </form>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="h-px flex-1 bg-border" /> {t('pro.noLicenseYet')} <span className="h-px flex-1 bg-border" />
         </div>
-        <TextureButton
+        <AppButton
           type="button"
           variant="secondary"
           className="w-full"
           onClick={() => window.open(whatsappUrl, '_blank', 'noopener,noreferrer')}
         >
           <MessageCircle className="size-4" /> {t('pro.contactAdmin')}
-        </TextureButton>
+        </AppButton>
         <p className="text-center font-mono text-xs text-muted-foreground">+{phone}</p>
       </DialogContent>
     </Dialog>

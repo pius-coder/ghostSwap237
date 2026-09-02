@@ -14,7 +14,7 @@ function RouteLoading() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 rounded-full border-4 border-blue-500/30 border-t-blue-500 animate-spin" />
+        <div className="size-12 animate-spin rounded-full border-4 border-white/20 border-t-foreground" />
         <p className="text-muted-foreground text-sm">{t('common.loading')}</p>
       </div>
     </div>
